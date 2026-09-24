@@ -846,3 +846,162 @@ h2 {
   margin: 0;
   font-size: 14px;
 }
+
+.roster-home,
+.roster-info,
+.roster-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.roster-home {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+.roster-info {
+  margin: 12px 0 20px;
+}
+.roster-summary {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.roster-summary > span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.roster-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+.roster-student {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.roster-student span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 17px;
+  line-height: 1.8;
+}
+.roster-student input,
+.roster-filter input {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  accent-color: #37483e;
+}
+.roster-student.is-selected {
+  background: #edf2ed;
+}
+.roster-checklist {
+  margin: 4px 0 16px;
+}
+.class-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.selected-details {
+  margin-top: 20px;
+}
+.selected-details > summary {
+  padding: 12px 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+.selected-details .entry-head strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.selected-details small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.manual-student {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+}
+.student-picker {
+  display: grid;
+  gap: 14px;
+}
+.student-results {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.student-results button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: start;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: white;
+  padding: 12px;
+  min-height: 54px;
+}
+.student-results button:hover,
+.student-results button:focus-visible {
+  background: #edf2ed;
+}
+.student-results button span {
+  overflow-wrap: anywhere;
+}
+.student-results small {
+  white-space: nowrap;
+  color: var(--muted);
+}
+.student-results .manual-choice {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.roster-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.roster-controls .field,
+.roster-controls input,
+.roster-controls select {
+  min-width: 0;
+  width: 100%;
+}
+.roster-grade {
+  margin-bottom: 12px;
+}
+.roster-grade summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 14px;
+}
+.roster-grade small {
+  margin-inline-start: 10px;
+}
+.roster-grade .field {
+  margin-top: 12px;
+}
+.class-navigation {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.class-navigation .button {
+  flex: 1;
+}

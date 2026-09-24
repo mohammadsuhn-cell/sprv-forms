@@ -31,6 +31,13 @@ late.students = Array.from({ length: 45 }, (_, i) => ({
   student: `طالب تجريبي L${String(i).padStart(3, "0")}`,
   arrival: "07:45",
 }));
+const rosterLate = structuredClone(late);
+rosterLate.rosterMode = "yes";
+rosterLate.students = rosterLate.students.map((student, i) => ({
+  ...student,
+  studentId: `fixture-${i}`,
+  className: `٧/${"١٢٣٤٥٦"[i % 6]}`,
+}));
 const original = JSON.stringify([long, late]);
 fs.mkdirSync("test-results", { recursive: true });
 for (const [name, fixture] of [
@@ -104,6 +111,7 @@ try {
   for (const [name, fixture] of [
     ["long-case", long],
     ["long-late", late],
+    ["long-roster-late", rosterLate],
   ]) {
     const result = await page.evaluate(
       async ({ asset, r }) => {

@@ -33,6 +33,7 @@ import {
   schoolIdentity,
   withSchoolIdentity,
   withSupervisor,
+  withRoster,
   fields,
   isRowFilled,
   caseRegister,
@@ -49,6 +50,8 @@ import {
   dateLabel,
 } from "./model.js";
 import { download, fileName } from "./exports.js";
+import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
+import { StudentPicker, LateChecklist } from "./roster-ui.jsx";
 function read() {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -132,6 +135,7 @@ function App() {
     [dueOnly, setDueOnly] = useState(false),
     [readyFile, setReadyFile] = useState(null);
   const restoreRef = useRef(),
+    rosterRef = useRef(),
     messageTimer = useRef(),
     currentData = useRef(initial.data),
     exportRevision = useRef(0);
@@ -215,7 +219,7 @@ function App() {
     if (!data.drafts[k])
       setData((d) => ({
         ...d,
-        drafts: { ...d.drafts, [k]: newForm(k, d.profile) },
+        drafts: { ...d.drafts, [k]: newForm(k, d.profile, d.roster) },
       }));
     setPage("form");
   }
@@ -232,7 +236,7 @@ function App() {
       )
     )
       return;
-    setDraft(newForm(kind, data.profile));
+    setDraft(newForm(kind, data.profile, data.roster));
     setErrors([]);
   }
   function check() {
@@ -346,6 +350,11 @@ function App() {
         withSupervisor(
           {
             ...d,
+            roster: d.roster || v.roster,
+            profile: {
+              ...d.profile,
+              grade: d.profile.grade || v.profile.grade || "",
+            },
             saved: [
               ...d.saved,
               ...v.saved.filter((s) => !d.saved.some((a) => a.id === s.id)),
@@ -360,6 +369,50 @@ function App() {
       notify(t("الملف ليس نسخة احتياطية صالحة", "Invalid backup file"));
     }
   }
+  async function importRoster(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !writeAllowed) return;
+    try {
+      if (file.size > 3000000) throw Error();
+      const roster = validateRoster(JSON.parse(await file.text()));
+      if (
+        roster.school !== schoolIdentity.school ||
+        roster.year !== schoolIdentity.year
+      ) {
+        notify(
+          t(
+            "قائمة الطلبة تخص مدرسة أو عامًا دراسيًا مختلفًا",
+            "The roster belongs to a different school or school year",
+          ),
+        );
+        return;
+      }
+      if (
+        !confirm(
+          t(
+            `تحميل قائمة تضم ${arDigits(roster.students.length)} طالبًا؟ تبقى السجلات والمسودات الحالية.`,
+            `Load ${roster.students.length} students? Existing records and drafts remain.`,
+          ),
+        )
+      )
+        return;
+      if (setData((d) => withRoster(d, roster)))
+        notify(
+          t(
+            "تم حفظ قائمة الطلبة على هذا الجهاز",
+            "Roster saved on this device",
+          ),
+        );
+    } catch {
+      notify(t("الملف ليس قائمة طلبة صالحة", "Invalid roster file"));
+    }
+  }
+  const availableClasses = rosterClasses(data.roster, data.profile.grade);
+  const groupField = (f) =>
+    f.key === "className" && availableClasses.length
+      ? { ...f, kind: "select", options: availableClasses }
+      : f;
   function sectionTitle(ar, english) {
     return <h2>{t(ar, english)}</h2>;
   }
@@ -422,7 +475,18 @@ function App() {
               <Field
                 lang={data.lang}
                 key={f.key}
-                field={f}
+                field={
+                  f.key === "className" && availableClasses.length
+                    ? {
+                        ...groupField(f),
+                        options: [
+                          ...new Set(
+                            [...availableClasses, row[f.key]].filter(Boolean),
+                          ),
+                        ],
+                      }
+                    : f
+                }
                 value={row[f.key]}
                 onChange={(v) =>
                   change(
@@ -449,7 +513,20 @@ function App() {
                     <Field
                       key={f.key}
                       lang={data.lang}
-                      field={f}
+                      field={
+                        f.key === "className" && availableClasses.length
+                          ? {
+                              ...groupField(f),
+                              options: [
+                                ...new Set(
+                                  [...availableClasses, row[f.key]].filter(
+                                    Boolean,
+                                  ),
+                                ),
+                              ],
+                            }
+                          : f
+                      }
                       value={row[f.key]}
                       onChange={(v) =>
                         change(
@@ -561,6 +638,22 @@ function App() {
                 <span>{schoolIdentity.year}</span>
               </div>
             )}
+            {data.roster && (
+              <div className="roster-home">
+                <span>
+                  {data.profile.grade || rosterGrades(data.roster).join("، ")}
+                </span>
+                <span>
+                  {arDigits(
+                    data.roster.students.filter(
+                      (s) =>
+                        !data.profile.grade || s.grade === data.profile.grade,
+                    ).length,
+                  )}{" "}
+                  {t("طالبًا", "students")}
+                </span>
+              </div>
+            )}
             <div className="form-cards">
               {[
                 ["case", "تسجيل حالة", "Record a case", ClipboardList],
@@ -647,6 +740,15 @@ function App() {
               <>
                 <section className="panel">
                   <div className="fields">
+                    {data.roster && (
+                      <StudentPicker
+                        form={form}
+                        roster={data.roster}
+                        grade={data.profile.grade}
+                        lang={data.lang}
+                        onChange={setDraft}
+                      />
+                    )}
                     {[
                       fields.date,
                       fields.student,
@@ -658,30 +760,36 @@ function App() {
                         ar: "موعد المتابعة (اختياري)",
                         en: "Follow-up date (optional)",
                       },
-                    ].map((f) => (
-                      <Field
-                        key={f.key}
-                        lang={data.lang}
-                        field={f}
-                        value={form[f.key]}
-                        onChange={(v) => {
-                          const next = { ...form, [f.key]: v };
-                          if (
-                            f.key === "action" &&
-                            !form.actionState &&
-                            v &&
-                            v !== "لم يُتخذ إجراء بعد"
-                          )
-                            next.actionState = "تم التنفيذ";
-                          if (
-                            f.key === "action" &&
-                            (!v || v === "لم يُتخذ إجراء بعد")
-                          )
-                            next.actionState = "";
-                          setDraft(next);
-                        }}
-                      />
-                    ))}
+                    ]
+                      .filter(
+                        (f) =>
+                          !data.roster ||
+                          !["student", "className"].includes(f.key),
+                      )
+                      .map((f) => (
+                        <Field
+                          key={f.key}
+                          lang={data.lang}
+                          field={f}
+                          value={form[f.key]}
+                          onChange={(v) => {
+                            const next = { ...form, [f.key]: v };
+                            if (
+                              f.key === "action" &&
+                              !form.actionState &&
+                              v &&
+                              v !== "لم يُتخذ إجراء بعد"
+                            )
+                              next.actionState = "تم التنفيذ";
+                            if (
+                              f.key === "action" &&
+                              (!v || v === "لم يُتخذ إجراء بعد")
+                            )
+                              next.actionState = "";
+                            setDraft(next);
+                          }}
+                        />
+                      ))}
                   </div>
                 </section>
                 <details className="panel optional">
@@ -717,46 +825,67 @@ function App() {
               </>
             ) : (
               <>
-                <section className="panel">
-                  <div className="fields">
-                    {field("date", "التاريخ", "Date", "date")}
-                    {kind === "late" && (
-                      <>
-                        <Field
-                          lang={data.lang}
-                          field={{
-                            key: "grade",
-                            ar: "الصف",
-                            en: "Grade",
-                            kind: "select",
-                            options: grades,
-                          }}
-                          value={form.grade}
-                          onChange={(grade) =>
-                            setDraft({ ...form, grade, className: "" })
-                          }
-                        />
-                        <Field
-                          lang={data.lang}
-                          field={{
-                            key: "className",
-                            ar: "الشعبة",
-                            en: "Class",
-                            kind: "select",
-                            options: classesForGrade(form.grade),
-                          }}
-                          value={form.className}
-                          disabled={!form.grade}
-                          onChange={(value) => change("className", value)}
-                        />
-                      </>
-                    )}
-                  </div>
-                </section>
-                {kind === "late" ? (
+                {(kind !== "late" || form.rosterMode !== "yes") && (
                   <section className="panel">
-                    {renderGroup(groups.late[0], ["student"])}
+                    <div className="fields">
+                      {field("date", "التاريخ", "Date", "date")}
+                      {kind === "late" && form.rosterMode !== "yes" && (
+                        <>
+                          <Field
+                            lang={data.lang}
+                            field={{
+                              key: "grade",
+                              ar: "الصف",
+                              en: "Grade",
+                              kind: "select",
+                              options: grades,
+                            }}
+                            value={form.grade}
+                            onChange={(grade) =>
+                              setDraft({ ...form, grade, className: "" })
+                            }
+                          />
+                          <Field
+                            lang={data.lang}
+                            field={{
+                              key: "className",
+                              ar: "الشعبة",
+                              en: "Class",
+                              kind: "select",
+                              options: classesForGrade(form.grade),
+                            }}
+                            value={form.className}
+                            disabled={!form.grade}
+                            onChange={(value) => change("className", value)}
+                          />
+                        </>
+                      )}
+                    </div>
                   </section>
+                )}
+                {kind === "late" ? (
+                  form.rosterMode === "yes" ? (
+                    <LateChecklist
+                      key={form.id}
+                      form={form}
+                      roster={data.roster}
+                      lang={data.lang}
+                      onChange={setDraft}
+                      Field={Field}
+                    />
+                  ) : (
+                    <section className="panel">
+                      {data.roster && (
+                        <button className="button" onClick={startNew}>
+                          {t(
+                            "نموذج جديد من قائمة الطلبة",
+                            "New form from the roster",
+                          )}
+                        </button>
+                      )}
+                      {renderGroup(groups.late[0], ["student"])}
+                    </section>
+                  )
                 ) : kind === "daily" ? (
                   <>
                     <section className="panel">
@@ -943,6 +1072,20 @@ function App() {
                   ),
                 )}
               </div>
+              <Field
+                lang={data.lang}
+                field={{
+                  key: "grade",
+                  ar: "الصف المسؤول عنه",
+                  en: "Assigned grade",
+                  kind: "select",
+                  options: grades,
+                }}
+                value={data.profile.grade || ""}
+                onChange={(grade) =>
+                  setData((d) => ({ ...d, profile: { ...d.profile, grade } }))
+                }
+              />
               <div className="settings-save">
                 <button className="button primary" onClick={saveSettings}>
                   <Check size={18} />
@@ -962,6 +1105,68 @@ function App() {
                       : t("لم يُضف اسم المشرف", "Supervisor name not entered")}
                 </span>
               </div>
+            </section>
+            <section className="panel">
+              {sectionTitle("قائمة الطلبة", "Student roster")}
+              {data.roster ? (
+                <div className="roster-info">
+                  <strong>{rosterGrades(data.roster).join("، ")}</strong>
+                  <span>
+                    {arDigits(data.roster.students.length)}{" "}
+                    {t("طالبًا", "students")} ·{" "}
+                    {arDigits(rosterClasses(data.roster).length)}{" "}
+                    {t("شعب", "classes")}
+                  </span>
+                </div>
+              ) : (
+                <p className="settings-note">
+                  {t("لم تُحمّل قائمة طلبة", "No student roster loaded")}
+                </p>
+              )}
+              <div className="backup-buttons">
+                <button
+                  className="button"
+                  disabled={!writeAllowed}
+                  onClick={() => rosterRef.current.click()}
+                >
+                  <Upload size={18} />
+                  {data.roster
+                    ? t("تحديث قائمة الطلبة", "Update roster")
+                    : t("تحميل قائمة الطلبة", "Load roster")}
+                </button>
+                {data.roster && (
+                  <button
+                    className="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          t(
+                            "إزالة قائمة الطلبة من هذا الجهاز؟ تبقى الأسماء في السجلات والمسودات.",
+                            "Remove this device's roster? Names in records and drafts remain.",
+                          ),
+                        )
+                      )
+                        setData((d) => ({ ...d, roster: null }));
+                    }}
+                  >
+                    {t("إزالة القائمة", "Remove roster")}
+                  </button>
+                )}
+              </div>
+              <p className="settings-note">
+                {t(
+                  "تُحفظ القائمة في هذا المتصفح وتُضمّن في النسخة الاحتياطية.",
+                  "The roster stays in this browser and is included in backups.",
+                )}
+              </p>
+              <input
+                hidden
+                ref={rosterRef}
+                aria-label="ملف قائمة الطلبة"
+                type="file"
+                accept=".json,application/json"
+                onChange={importRoster}
+              />
             </section>
             <section className="panel">
               {sectionTitle("نسخ البيانات", "Data backup")}
@@ -1012,6 +1217,7 @@ function App() {
               <input
                 hidden
                 ref={restoreRef}
+                aria-label="ملف النسخة الاحتياطية"
                 type="file"
                 accept=".json,application/json"
                 onChange={restore}

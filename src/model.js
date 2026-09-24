@@ -1,3 +1,4 @@
+import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 export const letterhead = Object.freeze({
   ministry: "وزارة التربية",
   district: "منطقة الفروانية التعليمية",
@@ -289,7 +290,7 @@ export function newRow(group) {
     ...group.fields.map((f) => [f.key, ""]),
   ]);
 }
-export function newForm(kind, profile = {}) {
+export function newForm(kind, profile = {}, roster = null) {
   const form = {
     id: uid(),
     kind,
@@ -302,8 +303,12 @@ export function newForm(kind, profile = {}) {
   };
   if (kind === "daily") form.decisions = "";
   if (kind === "late") {
-    form.grade = "";
+    form.grade = grades.includes(profile.grade) ? profile.grade : "";
     form.className = "";
+    if (rosterGrades(roster).includes(form.grade)) {
+      form.rosterMode = "yes";
+      form.className = rosterClasses(roster, form.grade)[0] || "";
+    }
   }
   if (kind === "cases") {
     form.from = today();
@@ -312,6 +317,7 @@ export function newForm(kind, profile = {}) {
   if (kind === "case")
     for (const s of caseSections) for (const f of s.fields) form[f.key] = "";
   for (const g of groups[kind]) form[g.key] = [newRow(g)];
+  if (form.rosterMode === "yes") form.students = [];
   return form;
 }
 export const isRowFilled = (row) =>
@@ -330,10 +336,20 @@ export function report(form) {
   if (form.kind === "late")
     meta.push(
       ["الصف", form.grade],
-      ["الشعبة", form.className],
+      [
+        form.rosterMode === "yes" ? "الشعب" : "الشعبة",
+        form.rosterMode === "yes"
+          ? [
+              ...new Set(form.students.map((s) => s.className).filter(Boolean)),
+            ].join("، ")
+          : form.className,
+      ],
       [
         "عدد المتأخرين",
-        arDigits(form.students.filter((row) => row.student?.trim()).length),
+        arDigits(
+          form.students.filter((row) => String(row.student ?? "").trim())
+            .length,
+        ),
       ],
     );
   if (form.kind === "cases") {
@@ -357,11 +373,19 @@ export function report(form) {
   } else
     for (const group of groups[form.kind]) {
       const filled = (form[group.key] || []).filter(isRowFilled);
-      const displayFields = group.fields.filter(
+      const outputFields =
+        form.kind === "late" && form.rosterMode === "yes"
+          ? [
+              fields.student,
+              fields.className,
+              ...group.fields.filter((f) => f.key !== "student"),
+            ]
+          : group.fields;
+      const displayFields = outputFields.filter(
         (f) =>
           f.key !== "lateNames" &&
           (form.kind !== "late" ||
-            f.key === "student" ||
+            ["student", "className"].includes(f.key) ||
             filled.some((row) => String(row[f.key] ?? "").trim() !== "")) &&
           (!["cases", "notifiedTime"].includes(f.key) ||
             filled.some((row) => String(row[f.key] ?? "").trim() !== "")),
@@ -423,13 +447,30 @@ export function validateForm(v) {
   if (v.kind === "late") {
     if (!grades.includes(v.grade))
       errors.push(["اختر الصف.", "Choose a grade."]);
-    if (!classesForGrade(v.grade).includes(v.className))
+    if (
+      v.rosterMode !== "yes" &&
+      !classesForGrade(v.grade).includes(v.className)
+    )
       errors.push([
         "اختر الشعبة التابعة للصف.",
         "Choose a class in this grade.",
       ]);
     const rows = v.students.filter(isRowFilled);
-    if (!rows.length || rows.some((row) => !row.student?.trim()))
+    if (
+      v.rosterMode === "yes" &&
+      rows.some((row) => !classesForGrade(v.grade).includes(row.className))
+    )
+      errors.push([
+        "حدد شعبة كل طالب متأخر.",
+        "Choose a class for each late student.",
+      ]);
+    const ids = rows.map((row) => row.studentId).filter(Boolean);
+    if (new Set(ids).size !== ids.length)
+      errors.push([
+        "الطالب مكرر في قائمة المتأخرين.",
+        "A student is duplicated in the late list.",
+      ]);
+    if (!rows.length || rows.some((row) => !String(row.student ?? "").trim()))
       errors.push([
         "أدخل اسم كل طالب متأخر.",
         "Enter each late student's name.",
@@ -464,7 +505,8 @@ export function validateForm(v) {
 export const storageKey = "sprv-phone-forms-v1";
 export const emptyStore = () => ({
   version: 1,
-  profile: { ...schoolIdentity, supervisor: "" },
+  profile: { ...schoolIdentity, supervisor: "", grade: "" },
+  roster: null,
   drafts: {},
   saved: [],
   lang: "ar",
@@ -481,6 +523,13 @@ export function validateStore(value) {
     throw Error("Invalid backup");
   for (const k of ["school", "year", "supervisor"])
     if (typeof value.profile[k] !== "string") throw Error("Invalid profile");
+  if (
+    value.profile.grade !== undefined &&
+    value.profile.grade !== "" &&
+    !grades.includes(value.profile.grade)
+  )
+    throw Error("Invalid profile grade");
+  const roster = value.roster == null ? null : validateRoster(value.roster);
   for (const [key, draft] of Object.entries(value.drafts))
     if (!titles[key] || draft.kind !== key) throw Error("Invalid draft");
   const forms = [...value.saved, ...Object.values(value.drafts)];
@@ -503,6 +552,9 @@ export function validateStore(value) {
         throw Error("Duplicate rows");
       for (const r of v[g.key]) {
         if (!r || typeof r.id !== "string") throw Error("Invalid row");
+        for (const key of ["studentId", "className"])
+          if (r[key] !== undefined && typeof r[key] !== "string")
+            throw Error("Invalid student reference");
         for (const f of g.fields) {
           if (
             v.kind === "daily" &&
@@ -524,7 +576,11 @@ export function validateStore(value) {
     throw Error("Duplicate records");
   return {
     ...value,
-    profile: withSchoolIdentity(value.profile),
+    profile: {
+      ...withSchoolIdentity(value.profile),
+      grade: value.profile.grade || "",
+    },
+    roster,
     drafts: Object.fromEntries(
       Object.entries(value.drafts).map(([k, v]) => [k, withSchoolIdentity(v)]),
     ),
@@ -576,4 +632,29 @@ export function withSupervisor(store, supervisor) {
       ]),
     ),
   };
+}
+
+export function withRoster(store, roster) {
+  const available = rosterGrades(roster);
+  const grade = available.includes(store.profile.grade)
+    ? store.profile.grade
+    : available[0];
+  const profile = { ...store.profile, grade };
+  const drafts = { ...store.drafts };
+  const late = drafts.late;
+  if (
+    late &&
+    !late.savedAt &&
+    !store.saved.some((s) => s.id === late.id) &&
+    !late.students.some(isRowFilled)
+  ) {
+    drafts.late = {
+      ...late,
+      grade,
+      className: rosterClasses(roster, grade)[0] || "",
+      rosterMode: "yes",
+      students: [],
+    };
+  }
+  return { ...store, profile, roster, drafts };
 }

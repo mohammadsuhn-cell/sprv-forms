@@ -2,3 +2,7 @@ node_modules/
 dist/
 test-results/
 .DS_Store
+
+# Real rosters must stay outside this public repository.
+*.sprv-roster.json
+private-rosters/

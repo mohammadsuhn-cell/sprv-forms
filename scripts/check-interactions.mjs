@@ -38,7 +38,7 @@ const download = async (page, action) => {
   return fs.readFile(await file.path());
 };
 const inputBackup = (page, data) =>
-  page.locator("input[type=file]").setInputFiles({
+  page.getByLabel("ملف النسخة الاحتياطية", { exact: true }).setInputFiles({
     name: "test-backup.json",
     mimeType: "application/json",
     buffer: Buffer.from(typeof data === "string" ? data : JSON.stringify(data)),
