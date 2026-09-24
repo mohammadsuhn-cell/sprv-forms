@@ -129,7 +129,8 @@ try {
   await page.getByLabel("متابعات مستحقة", { exact: true }).check();
   await expect(page.locator(".saved-open")).toHaveCount(1);
   await expect(button(page, "تصدير Excel")).toBeEnabled();
-  await download(page, () => button(page, "تصدير Excel").click());
+  await button(page, "تصدير Excel").click();
+  await download(page, () => button(page, "تنزيل الملف").click());
   // Unsupported native sharing falls back to a download; supported sharing and cancellation.
   await page.evaluate(() =>
     Object.defineProperty(navigator, "canShare", {

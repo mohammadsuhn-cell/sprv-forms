@@ -10,6 +10,9 @@ export function download(blob, name) {
     a = document.createElement("a");
   a.href = url;
   a.download = name;
+  // If Safari previews instead of downloading, keep the working form in its tab.
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
   document.body.append(a);
   a.click();
   a.remove();

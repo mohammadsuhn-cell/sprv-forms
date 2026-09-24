@@ -52,6 +52,7 @@ import {
 import { download, fileName } from "./exports.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 import { StudentPicker, LateChecklist } from "./roster-ui.jsx";
+import { FileActions } from "./file-actions.jsx";
 function read() {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -265,6 +266,7 @@ function App() {
     if (target === form && !check()) return;
     const revision = ++exportRevision.current;
     setErrors([]);
+    setMessage("");
     setBusy(type);
     setReadyFile(null);
     try {
@@ -277,9 +279,7 @@ function App() {
             : await lib.wordBlob(target);
       const name = fileName(target, type === "word" ? "docx" : type);
       if (revision !== exportRevision.current) return;
-      download(blob, name);
       setReadyFile({ blob, name });
-      notify(t("تم تجهيز الملف", "File ready"));
     } catch (e) {
       if (revision !== exportRevision.current) return;
       console.error("Export failed", e);
@@ -595,7 +595,9 @@ function App() {
           </button>
         </div>
       </header>
-      <main className={page === "form" ? "content editing" : "content"}>
+      <main
+        className={`${page === "form" ? "content editing" : "content"}${readyFile ? " has-ready-file" : ""}`}
+      >
         {storageError && (
           <div className="alert" role="alert">
             {storageError}
@@ -955,43 +957,36 @@ function App() {
                 </details>
               </>
             )}
-            {readyFile && (
-              <div className="file-ready">
-                <Check size={18} />
-                <span>{readyFile.name}</span>
-                <button className="button" onClick={share}>
-                  <Share2 size={17} />
-                  {t("مشاركة", "Share")}
+
+            {!readyFile && (
+              <div className="action-bar">
+                <button
+                  className="button primary"
+                  disabled={!!busy}
+                  onClick={save}
+                >
+                  <Check size={18} />
+                  {kind === "case"
+                    ? t("حفظ الحالة", "Save record")
+                    : t("حفظ النموذج", "Save form")}
                 </button>
+                <details className="export-menu">
+                  <summary className="button">{t("تصدير", "Export")}</summary>
+                  <div>
+                    {["pdf", "word", "xlsx"].map((type) => (
+                      <button
+                        key={type}
+                        className="button"
+                        disabled={!!busy}
+                        onClick={() => exportFile(type)}
+                      >
+                        {type === "word" ? "Word" : type.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </details>
               </div>
             )}
-            <div className="action-bar">
-              <button
-                className="button primary"
-                disabled={!!busy}
-                onClick={save}
-              >
-                <Check size={18} />
-                {kind === "case"
-                  ? t("حفظ الحالة", "Save record")
-                  : t("حفظ النموذج", "Save form")}
-              </button>
-              <details className="export-menu">
-                <summary className="button">{t("تصدير", "Export")}</summary>
-                <div>
-                  {["pdf", "word", "xlsx"].map((type) => (
-                    <button
-                      key={type}
-                      className="button"
-                      disabled={!!busy}
-                      onClick={() => exportFile(type)}
-                    >
-                      {type === "word" ? "Word" : type.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </details>
-            </div>
           </>
         )}
         {page === "saved" && (
@@ -1030,14 +1025,7 @@ function App() {
                 {t("تصدير Excel", "Export Excel")}
               </button>
             </div>
-            {readyFile && (
-              <div className="file-ready">
-                <span>{readyFile.name}</span>
-                <button className="button" onClick={share}>
-                  {t("مشاركة", "Share")}
-                </button>
-              </div>
-            )}
+
             <section className="panel saved-list">
               {visibleSaved.map((s) => (
                 <SavedRow key={s.id} item={s} remove />
@@ -1228,6 +1216,8 @@ function App() {
               <a
                 className="templates"
                 href="./نماذج-الإشراف-المبسطة.xlsx"
+                target="_blank"
+                rel="noopener noreferrer"
                 download
               >
                 {t("نموذج Excel", "Excel template")}
@@ -1235,6 +1225,8 @@ function App() {
               <a
                 className="templates"
                 href="./School-Supervision-Word-Forms.zip"
+                target="_blank"
+                rel="noopener noreferrer"
                 download
               >
                 {t("قوالب Word", "Word templates")}
@@ -1263,6 +1255,15 @@ function App() {
           </>
         )}
       </main>
+      {readyFile && (
+        <FileActions
+          file={readyFile}
+          lang={data.lang}
+          onShare={share}
+          onClose={() => setReadyFile(null)}
+          onError={notify}
+        />
+      )}
       <datalist id="classes">
         {["٦", "٧", "٨", "٩"].flatMap((g) =>
           ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "١٠"].map((c) => (

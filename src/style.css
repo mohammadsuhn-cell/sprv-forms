@@ -494,20 +494,48 @@ h2 {
   margin: 15px 0 0;
 }
 .file-ready {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 15px;
-  background: #edf4f0;
-  border: 1px solid #caddd1;
-  border-radius: 7px;
-  font-size: 13px;
-  margin-bottom: 20px;
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - 24px));
+  z-index: 20;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 5px 28px #0002;
 }
-.file-ready span {
-  flex: 1;
+.file-ready-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.file-ready-heading div {
+  min-width: 0;
+}
+.file-ready-heading strong {
+  font-size: 17px;
+}
+.file-ready-heading p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 3px 0 0;
   overflow-wrap: anywhere;
+}
+.file-ready-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.file-ready-actions .button {
+  flex: 1 1 auto;
+  text-decoration: none;
+}
+.content.has-ready-file {
+  padding-bottom: 290px;
 }
 .export-host {
   position: fixed;
@@ -1004,4 +1032,12 @@ h2 {
 }
 .class-navigation .button {
   flex: 1;
+}
+
+.file-ready-actions a.button {
+  color: var(--ink);
+}
+.file-ready ~ .toast {
+  bottom: 285px;
+  pointer-events: none;
 }

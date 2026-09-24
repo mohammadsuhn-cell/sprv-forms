@@ -10,6 +10,23 @@ import {
   emptyStore,
   storageKey,
 } from "../src/model.js";
+async function downloadPrepared(page) {
+  const en = (await page.locator("html").getAttribute("lang")) === "en";
+  await page
+    .getByRole("button", {
+      name: en ? "Download file" : "تنزيل الملف",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", {
+      name: en ? "Close file options" : "إغلاق خيارات الملف",
+      exact: true,
+    })
+    .click();
+  const menu = page.locator(".export-menu");
+  if (await menu.count()) await menu.locator("summary").click();
+}
 fs.mkdirSync("test-results", { recursive: true });
 const server = spawn(
   process.execPath,
@@ -144,6 +161,7 @@ try {
   ]) {
     const waiting = page.waitForEvent("download", { timeout: 60000 });
     await page.getByRole("button", { name: label, exact: true }).click();
+    await downloadPrepared(page);
     await (await waiting).saveAs(`test-results/simple-case.${ext}`);
   }
   const drawn = await page.evaluate(() => window.drawnLines.join("\n"));
@@ -161,6 +179,7 @@ try {
   assert.equal(await page.locator(".saved-open").count(), 1);
   const register = page.waitForEvent("download");
   await page.getByRole("button", { name: "تصدير Excel", exact: true }).click();
+  await downloadPrepared(page);
   await (await register).saveAs("test-results/simple-register.xlsx");
   await page.getByRole("button", { name: "الإعدادات", exact: true }).click();
   await page.getByText("ملفات ونماذج أخرى", { exact: true }).click();
@@ -170,6 +189,7 @@ try {
   await page.getByText("تصدير", { exact: true }).click();
   const longDownload = page.waitForEvent("download", { timeout: 120000 });
   await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await downloadPrepared(page);
   await (await longDownload).saveAs("test-results/long-register.pdf");
   assert(
     (await page.evaluate(() => window.drawnLines.join("\n"))).includes(
@@ -196,6 +216,7 @@ try {
   await page.getByText("Export", { exact: true }).click();
   const offline = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await downloadPrepared(page);
   await (await offline).saveAs("test-results/offline-case.pdf");
   const data = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)),
@@ -270,6 +291,7 @@ try {
   ]) {
     const waiting = entry.waitForEvent("download", { timeout: 60000 });
     await entry.getByRole("button", { name: label, exact: true }).click();
+    await downloadPrepared(entry);
     await (await waiting).saveAs(`test-results/daily-brief.${ext}`);
   }
   const briefBook = new ExcelJS.Workbook();
@@ -307,6 +329,7 @@ try {
   await entry.getByText("تصدير", { exact: true }).click();
   const coverPdf = entry.waitForEvent("download");
   await entry.getByRole("button", { name: "PDF", exact: true }).click();
+  await downloadPrepared(entry);
   await (await coverPdf).saveAs("test-results/teacher-log.pdf");
   assert(
     await entry.evaluate(
@@ -375,6 +398,7 @@ try {
   ]) {
     const waiting = entry.waitForEvent("download", { timeout: 60000 });
     await entry.getByRole("button", { name: label, exact: true }).click();
+    await downloadPrepared(entry);
     await (await waiting).saveAs(`test-results/late-students.${ext}`);
   }
   const lateBook = new ExcelJS.Workbook();

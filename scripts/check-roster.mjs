@@ -50,6 +50,11 @@ async function importRoster(page, value, accept = true) {
 async function download(page, name, output) {
   const pending = page.waitForEvent("download", { timeout: 60000 });
   await button(page, name).click();
+  if (["PDF", "Word", "XLSX"].includes(name)) {
+    await button(page, "تنزيل الملف").click();
+    await button(page, "إغلاق خيارات الملف").click();
+    await page.locator(".export-menu summary").click();
+  }
   const result = await pending;
   assert.equal(await result.failure(), null);
   await result.saveAs(output);
