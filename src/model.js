@@ -558,3 +558,22 @@ export function caseRegister(saved, profile = {}) {
   v.to = dates.at(-1) || today();
   return v;
 }
+
+// Apply the device owner's name to unfinished drafts, preserving historical authors.
+export function withSupervisor(store, supervisor) {
+  const previous = store.profile.supervisor;
+  return {
+    ...store,
+    profile: { ...store.profile, supervisor },
+    drafts: Object.fromEntries(
+      Object.entries(store.drafts).map(([kind, draft]) => [
+        kind,
+        !draft.savedAt &&
+        !store.saved.some((saved) => saved.id === draft.id) &&
+        (!draft.supervisor.trim() || draft.supervisor === previous)
+          ? { ...draft, supervisor }
+          : draft,
+      ]),
+    ),
+  };
+}

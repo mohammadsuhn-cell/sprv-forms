@@ -32,6 +32,7 @@ import {
   arDigits,
   schoolIdentity,
   withSchoolIdentity,
+  withSupervisor,
   fields,
   isRowFilled,
   caseRegister,
@@ -120,7 +121,7 @@ function OptionalPanel({ title, initialOpen = false, children }) {
 
 function App() {
   const [writeAllowed, setWriteAllowed] = useState(!initial.error);
-  const [data, setData] = useState(initial.data),
+  const [data, updateData] = useState(initial.data),
     [page, setPage] = useState("home"),
     [kind, setKind] = useState(""),
     [message, setMessage] = useState(""),
@@ -131,7 +132,9 @@ function App() {
     [dueOnly, setDueOnly] = useState(false),
     [readyFile, setReadyFile] = useState(null);
   const restoreRef = useRef(),
-    messageTimer = useRef();
+    messageTimer = useRef(),
+    currentData = useRef(initial.data),
+    exportRevision = useRef(0);
   const en = data.lang === "en",
     t = (ar, english) => (en ? english : ar),
     form = data.drafts[kind];
@@ -139,26 +142,56 @@ function App() {
     document.documentElement.lang = en ? "en" : "ar";
     document.documentElement.dir = en ? "ltr" : "rtl";
   }, [en]);
-  useEffect(() => {
-    if (!writeAllowed) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(data));
-      setStorageError("");
-    } catch {
-      setStorageError(
-        t(
-          "تعذّر حفظ البيانات على الجهاز. نزّل نسخة احتياطية قبل الإغلاق.",
-          "Could not save on this device. Download a backup before closing.",
-        ),
-      );
+  // Persist during the action itself, including each settings keystroke.
+  // Keep unsaved edits in memory if storage is unavailable, but never report success.
+  function setData(value, allowReset = false) {
+    const next =
+      typeof value === "function" ? value(currentData.current) : value;
+    let persisted = false;
+    if (writeAllowed || allowReset) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        setStorageError("");
+        persisted = true;
+      } catch {
+        setMessage("");
+        setStorageError(
+          t(
+            "تعذّر حفظ البيانات على الجهاز. نزّل نسخة احتياطية قبل الإغلاق.",
+            "Could not save on this device. Download a backup before closing.",
+          ),
+        );
+      }
     }
-  }, [data, writeAllowed]);
+    currentData.current = next;
+    updateData(next);
+    setReadyFile(null);
+    exportRevision.current++;
+    return persisted;
+  }
+  function saveSettings() {
+    const name = data.profile.supervisor.trim();
+    if (!name) {
+      notify(t("أدخل اسم المشرف", "Enter the supervisor name"));
+      return;
+    }
+    if (setData((d) => withSupervisor(d, name)))
+      notify(
+        t("تم حفظ الإعدادات على هذا الجهاز", "Settings saved on this device"),
+      );
+  }
   useEffect(() => () => clearTimeout(messageTimer.current), []);
   useEffect(() => {
     window.scrollTo(0, 0);
     setErrors([]);
     setReadyFile(null);
+    exportRevision.current++;
   }, [page, kind]);
+  useEffect(() => {
+    setErrors([]);
+    setReadyFile(null);
+    exportRevision.current++;
+  }, [query, dueOnly]);
   function notify(text) {
     setMessage(text);
     clearTimeout(messageTimer.current);
@@ -167,12 +200,15 @@ function App() {
   function setDraft(value) {
     value = withSchoolIdentity(value);
     setData((d) => ({ ...d, drafts: { ...d.drafts, [value.kind]: value } }));
-    setReadyFile(null);
   }
   function change(key, value) {
     setDraft({ ...form, [key]: value });
     if (["school", "supervisor", "year"].includes(key))
-      setData((d) => ({ ...d, profile: { ...d.profile, [key]: value } }));
+      setData((d) =>
+        key === "supervisor"
+          ? withSupervisor(d, value)
+          : { ...d, profile: { ...d.profile, [key]: value } },
+      );
   }
   function openKind(k) {
     setKind(k);
@@ -211,16 +247,20 @@ function App() {
   function save() {
     if (!check()) return;
     const saved = { ...form, savedAt: new Date().toISOString() };
-    setData((d) => ({
+    const persisted = setData((d) => ({
       ...d,
       saved: [saved, ...d.saved.filter((s) => s.id !== form.id)],
       drafts: { ...d.drafts, [form.kind]: saved },
     }));
-    notify(t("تم الحفظ", "Saved"));
-    setPage("saved");
+    if (persisted) {
+      notify(t("تم الحفظ", "Saved"));
+      setPage("saved");
+    }
   }
   async function exportFile(type, target = form) {
     if (target === form && !check()) return;
+    const revision = ++exportRevision.current;
+    setErrors([]);
     setBusy(type);
     setReadyFile(null);
     try {
@@ -232,10 +272,12 @@ function App() {
             ? await lib.excelBlob(target)
             : await lib.wordBlob(target);
       const name = fileName(target, type === "word" ? "docx" : type);
+      if (revision !== exportRevision.current) return;
       download(blob, name);
       setReadyFile({ blob, name });
       notify(t("تم تجهيز الملف", "File ready"));
     } catch (e) {
+      if (revision !== exportRevision.current) return;
       console.error("Export failed", e);
       setErrors([
         t(
@@ -267,22 +309,27 @@ function App() {
     }
   }
   function backup() {
-    download(
-      new Blob(
-        [
-          !writeAllowed
-            ? localStorage.getItem(storageKey) || JSON.stringify(data)
-            : JSON.stringify(data, null, 2),
-        ],
-        { type: "application/json" },
-      ),
-      `supervision-backup-${today()}.json`,
-    );
+    try {
+      const contents = !writeAllowed
+        ? localStorage.getItem(storageKey) ||
+          JSON.stringify(currentData.current)
+        : JSON.stringify(currentData.current, null, 2);
+      download(
+        new Blob([contents], { type: "application/json" }),
+        `supervision-backup-${today()}.json`,
+      );
+      return true;
+    } catch {
+      notify(
+        t("تعذّر تنزيل النسخة الاحتياطية", "Could not download the backup"),
+      );
+      return false;
+    }
   }
   async function restore(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!file || !writeAllowed) return;
     try {
       if (file.size > 15000000) throw Error();
       const v = validateStore(JSON.parse(await file.text()));
@@ -295,20 +342,20 @@ function App() {
         )
       )
         return;
-      setData((d) => ({
-        ...d,
-        profile: {
-          school: d.profile.school || v.profile.school,
-          year: d.profile.year || v.profile.year,
-          supervisor: d.profile.supervisor || v.profile.supervisor,
-        },
-        saved: [
-          ...d.saved,
-          ...v.saved.filter((s) => !d.saved.some((a) => a.id === s.id)),
-        ],
-        drafts: { ...v.drafts, ...d.drafts },
-      }));
-      notify(t("تمت الاستعادة", "Backup restored"));
+      const persisted = setData((d) =>
+        withSupervisor(
+          {
+            ...d,
+            saved: [
+              ...d.saved,
+              ...v.saved.filter((s) => !d.saved.some((a) => a.id === s.id)),
+            ],
+            drafts: { ...v.drafts, ...d.drafts },
+          },
+          d.profile.supervisor || v.profile.supervisor,
+        ),
+      );
+      if (persisted) notify(t("تمت الاستعادة", "Backup restored"));
     } catch {
       notify(t("الملف ليس نسخة احتياطية صالحة", "Invalid backup file"));
     }
@@ -336,7 +383,8 @@ function App() {
         <span className="count">
           {arDigits(
             kind === "late"
-              ? form.students.filter((r) => r.student.trim()).length
+              ? form.students.filter((r) => String(r.student ?? "").trim())
+                  .length
               : form[group.key].length,
           )}
         </span>
@@ -434,6 +482,14 @@ function App() {
       </button>
     </section>
   );
+  const visibleSaved = data.saved.filter(
+    (s) =>
+      JSON.stringify(s).toLowerCase().includes(query.toLowerCase()) &&
+      (!dueOnly ||
+        (s.due &&
+          s.due <= today() &&
+          !["مغلقة", "تمت المتابعة"].includes(s.status))),
+  );
   return (
     <>
       <header className="topbar">
@@ -467,6 +523,13 @@ function App() {
           <div className="alert" role="alert">
             {storageError}
             <button onClick={backup}>{t("نسخة احتياطية", "Backup")}</button>
+          </div>
+        )}
+        {errors.length > 0 && (
+          <div className="alert" role="alert">
+            {errors.map((s, i) => (
+              <div key={i}>{s}</div>
+            ))}
           </div>
         )}
         {page !== "home" && (
@@ -561,13 +624,6 @@ function App() {
                 {t("جديد", "New")}
               </button>
             </div>
-            {errors.length > 0 && (
-              <div className="alert" role="alert">
-                {errors.map((s, i) => (
-                  <div key={i}>{s}</div>
-                ))}
-              </div>
-            )}
             <OptionalPanel
               key={form.id}
               initialOpen={!form.supervisor}
@@ -835,27 +891,11 @@ function App() {
               </label>
               <button
                 className="button"
-                disabled={!!busy || !data.saved.some((s) => s.kind === "case")}
+                disabled={
+                  !!busy || !visibleSaved.some((s) => s.kind === "case")
+                }
                 onClick={() =>
-                  exportFile(
-                    "xlsx",
-                    caseRegister(
-                      data.saved
-                        .filter(
-                          (s) =>
-                            !dueOnly ||
-                            (s.due &&
-                              s.due <= today() &&
-                              !["مغلقة", "تمت المتابعة"].includes(s.status)),
-                        )
-                        .filter((s) =>
-                          JSON.stringify(s)
-                            .toLowerCase()
-                            .includes(query.toLowerCase()),
-                        ),
-                      data.profile,
-                    ),
-                  )
+                  exportFile("xlsx", caseRegister(visibleSaved, data.profile))
                 }
               >
                 {t("تصدير Excel", "Export Excel")}
@@ -870,30 +910,10 @@ function App() {
               </div>
             )}
             <section className="panel saved-list">
-              {data.saved
-                .filter(
-                  (s) =>
-                    JSON.stringify(s)
-                      .toLowerCase()
-                      .includes(query.toLowerCase()) &&
-                    (!dueOnly ||
-                      (s.due &&
-                        s.due <= today() &&
-                        !["مغلقة", "تمت المتابعة"].includes(s.status))),
-                )
-                .map((s) => (
-                  <SavedRow key={s.id} item={s} remove />
-                ))}
-              {!data.saved.filter(
-                (s) =>
-                  JSON.stringify(s)
-                    .toLowerCase()
-                    .includes(query.toLowerCase()) &&
-                  (!dueOnly ||
-                    (s.due &&
-                      s.due <= today() &&
-                      !["مغلقة", "تمت المتابعة"].includes(s.status))),
-              ).length && (
+              {visibleSaved.map((s) => (
+                <SavedRow key={s.id} item={s} remove />
+              ))}
+              {!visibleSaved.length && (
                 <p className="empty">
                   {t("لا توجد نماذج محفوظة", "No saved forms")}
                 </p>
@@ -918,22 +938,30 @@ function App() {
                       key={key}
                       field={{ key, ar, en: english }}
                       value={data.profile[key]}
-                      onChange={(v) =>
-                        setData((d) => ({
-                          ...d,
-                          profile: { ...d.profile, [key]: v },
-                        }))
-                      }
+                      onChange={(v) => setData((d) => withSupervisor(d, v))}
                     />
                   ),
                 )}
               </div>
-              <span className="small-status">
-                {t(
-                  "تُحفظ تلقائيًا على هذا الجهاز",
-                  "Saved automatically on this device",
-                )}
-              </span>
+              <div className="settings-save">
+                <button className="button primary" onClick={saveSettings}>
+                  <Check size={18} />
+                  {t("حفظ الإعدادات", "Save settings")}
+                </button>
+                <span className="small-status" role="status">
+                  {storageError
+                    ? t(
+                        "لم تُحفظ التغييرات على الجهاز",
+                        "Changes are not saved on this device",
+                      )
+                    : data.profile.supervisor.trim()
+                      ? t(
+                          "الاسم محفوظ على هذا الجهاز",
+                          "Name saved on this device",
+                        )
+                      : t("لم يُضف اسم المشرف", "Supervisor name not entered")}
+                </span>
+              </div>
             </section>
             <section className="panel">
               {sectionTitle("نسخ البيانات", "Data backup")}
@@ -949,10 +977,9 @@ function App() {
                         ),
                       )
                     ) {
-                      backup();
-                      setData(emptyStore());
-                      setWriteAllowed(true);
-                      setStorageError("");
+                      if (backup() && setData(emptyStore(), true)) {
+                        setWriteAllowed(true);
+                      }
                     }
                   }}
                 >
@@ -969,6 +996,7 @@ function App() {
                 </button>
                 <button
                   className="button"
+                  disabled={!writeAllowed}
                   onClick={() => restoreRef.current.click()}
                 >
                   <Upload size={18} />
@@ -1038,7 +1066,6 @@ function App() {
       </datalist>
       {message && (
         <div className="toast" role="status">
-          <Check size={17} />
           {message}
         </div>
       )}
@@ -1093,11 +1120,16 @@ function App() {
             className="icon danger"
             aria-label={t("حذف النسخة", "Delete saved copy")}
             onClick={() => {
-              if (confirm(t("حذف النسخة المحفوظة؟", "Delete this saved copy?")))
-                setData((d) => ({
+              if (
+                confirm(t("حذف النسخة المحفوظة؟", "Delete this saved copy?"))
+              ) {
+                const persisted = setData((d) => ({
                   ...d,
                   saved: d.saved.filter((s) => s.id !== item.id),
                 }));
+                if (persisted)
+                  notify(t("تم حذف النسخة المحفوظة", "Saved copy deleted"));
+              }
             }}
           >
             <Trash2 size={18} />

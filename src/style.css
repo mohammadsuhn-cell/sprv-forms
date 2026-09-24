@@ -834,3 +834,15 @@ h2 {
 .optional > summary > .count {
   margin-inline-start: 12px;
 }
+
+.settings-save {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.settings-save .small-status {
+  margin: 0;
+  font-size: 14px;
+}

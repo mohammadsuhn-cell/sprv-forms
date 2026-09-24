@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newForm,
+  withSupervisor,
   schoolIdentity,
   report,
   validateForm,
@@ -210,4 +211,23 @@ test("late students require matching grade/class and names, count named students
   assert.deepEqual(validateForm(v), []);
   v.students[2].arrival = "08:00";
   assert(validateForm(v).length);
+});
+
+test("supervisor changes populate unfinished drafts without changing historical authors", () => {
+  const store = emptyStore();
+  store.profile.supervisor = "المشرف السابق";
+  for (const kind of ["case", "daily", "late", "staffing"])
+    store.drafts[kind] = newForm(kind, store.profile);
+  store.drafts.case.supervisor = "";
+  store.drafts.late.supervisor = "مشرف آخر";
+  store.drafts.staffing.savedAt = "2026-09-24T08:00:00Z";
+  store.saved = [structuredClone(store.drafts.staffing)];
+  const next = withSupervisor(store, "المشرف الجديد");
+  assert.equal(next.profile.supervisor, "المشرف الجديد");
+  assert.equal(next.drafts.case.supervisor, "المشرف الجديد");
+  assert.equal(next.drafts.daily.supervisor, "المشرف الجديد");
+  assert.equal(next.drafts.late.supervisor, "مشرف آخر");
+  assert.equal(next.drafts.staffing.supervisor, "المشرف السابق");
+  assert.deepEqual(next.saved, store.saved);
+  assert.equal(store.drafts.case.supervisor, "");
 });
