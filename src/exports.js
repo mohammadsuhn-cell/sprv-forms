@@ -36,7 +36,7 @@ export async function wordBlob(form) {
   const p = (text, bold = false, size = 24) =>
     new Paragraph({
       bidirectional: true,
-      alignment: AlignmentType.RIGHT,
+      alignment: AlignmentType.START,
       spacing: { after: 110 },
       children: String(text || "")
         .split("\n")
@@ -44,8 +44,10 @@ export async function wordBlob(form) {
           ...(i ? [new TextRun({ break: 1 })] : []),
           new TextRun({
             text: s,
-            font: "Arial",
+            font: { ascii: "Arial", hAnsi: "Arial", cs: "Arial" },
             size,
+            sizeComplexScript: size,
+            boldComplexScript: bold,
             bold,
             rightToLeft: true,
           }),
@@ -98,7 +100,11 @@ export async function wordBlob(form) {
     styles: {
       default: {
         document: {
-          run: { font: "Arial", size: 24 },
+          run: {
+            font: { ascii: "Arial", hAnsi: "Arial", cs: "Arial" },
+            size: 24,
+            sizeComplexScript: 24,
+          },
           paragraph: { bidirectional: true },
         },
       },
@@ -130,147 +136,13 @@ export async function wordBlob(form) {
   });
   return Packer.toBlob(doc);
 }
-const node = (tag, text, cls) => {
-  const e = document.createElement(tag);
-  if (text !== undefined) e.textContent = text;
-  if (cls) e.className = cls;
-  return e;
-};
-const chunks = (text, max = 180) => {
-  const words = String(text || "").split(/(?<=\s)/u);
-  const parts = [];
-  let current = "";
-  for (const word of words) {
-    if (current.length + word.length > max && current) {
-      parts.push(current);
-      current = "";
-    }
-    for (let start = 0; start < word.length; start += max) {
-      const piece = word.slice(start, start + max);
-      if (piece.length === max) {
-        if (current) {
-          parts.push(current);
-          current = "";
-        }
-        parts.push(piece);
-      } else current += piece;
-    }
-  }
-  if (current || !parts.length) parts.push(current);
-  return parts;
-};
-export function mountReport(form) {
-  const r = report(form),
-    host = node("div", undefined, "export-host");
-  host.setAttribute("aria-hidden", "true");
-  document.body.append(host);
-  const pages = [];
-  let page, body;
-  const newPage = () => {
-    page = node(
-      "article",
-      undefined,
-      `paper ${r.landscape ? "landscape" : ""}`,
-    );
-    page.dir = "rtl";
-    const header = node("header");
-    header.append(
-      node("strong", r.school),
-      node("span", `العام الدراسي: ${r.year}`),
-      node("h1", r.title),
-    );
-    page.append(header);
-    body = node("div", undefined, "paper-body");
-    page.append(body, node("footer", String(pages.length + 1)));
-    host.append(page);
-    pages.push(page);
-  };
-  newPage();
-  const fits = () => body.scrollHeight <= body.clientHeight + 1;
-  const append = (e) => {
-    body.append(e);
-    if (!fits()) {
-      e.remove();
-      newPage();
-      body.append(e);
-    }
-  };
-  const meta = node("div", undefined, "paper-meta");
-  for (const [k, v] of r.meta) meta.append(node("span", `${k}: ${v}`));
-  append(meta);
-  for (const t of r.tables) {
-    let table, tbody, wrap;
-    const setup = () => {
-      wrap = node("section");
-      wrap.append(node("h2", t.title));
-      table = node("table");
-      const columns = node("colgroup");
-      for (const width of widths(t)) {
-        const col = node("col");
-        col.style.width = width + "%";
-        columns.append(col);
-      }
-      table.append(columns);
-      const th = node("thead"),
-        tr = node("tr");
-      for (const c of t.columns) tr.append(node("th", c));
-      th.append(tr);
-      tbody = node("tbody");
-      table.append(th, tbody);
-      wrap.append(table);
-      body.append(wrap);
-    };
-    setup();
-    for (const row of t.rows) {
-      const pieces = row.map((c, i) =>
-        chunks(c, Math.max(140, Math.round(widths(t)[i] * 20))),
-      );
-      const count = Math.max(...pieces.map((p) => p.length));
-      for (let i = 0; i < count; i++) {
-        const tr = node("tr");
-        pieces.forEach((p) => tr.append(node("td", p[i] || "")));
-        tbody.append(tr);
-        if (!fits()) {
-          tr.remove();
-          if (!tbody.children.length) wrap.remove();
-          newPage();
-          setup();
-          tbody.append(tr);
-        }
-      }
-    }
-  }
-  for (const section of r.sections) {
-    let first = true;
-    for (const [key, value] of section.lines) {
-      const parts = chunks(value, 500);
-      for (let i = 0; i < parts.length; i++) {
-        const wrap = node("section");
-        if (first) wrap.append(node("h2", section.title));
-        const p = node("p");
-        if (key && i === 0) p.append(node("b", key + ": "));
-        p.append(document.createTextNode(parts[i]));
-        wrap.append(p);
-        append(wrap);
-        first = false;
-      }
-    }
-  }
-  const sig = node("div", undefined, "signature");
-  sig.append(
-    node("span", `اسم المشرف: ${r.supervisor}`),
-    node("span", "التوقيع: ____________________"),
-  );
-  append(sig);
-  return { host, pages, report: r };
-}
 export async function pdfBlob(form) {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
+  const [{ renderPages }, { jsPDF }] = await Promise.all([
+    import("./pdf-pages.js"),
     import("jspdf"),
   ]);
-  await document.fonts.ready;
-  const { host, pages, report: r } = mountReport(form);
+  const r = report(form),
+    pages = await renderPages(r);
   try {
     const pdf = new jsPDF({
       orientation: r.landscape ? "landscape" : "portrait",
@@ -281,17 +153,8 @@ export async function pdfBlob(form) {
     pdf.setProperties({ title: r.title, author: "", creator: "نماذج الإشراف" });
     for (let i = 0; i < pages.length; i++) {
       if (i) pdf.addPage();
-      const canvas = await html2canvas(pages[i], {
-        scale: 2,
-        backgroundColor: "#fff",
-        logging: false,
-        windowWidth: 1200,
-        windowHeight: 1200,
-        scrollX: 0,
-        scrollY: 0,
-      });
       pdf.addImage(
-        canvas.toDataURL("image/png"),
+        pages[i].toDataURL("image/png"),
         "PNG",
         0,
         0,
@@ -300,11 +163,108 @@ export async function pdfBlob(form) {
         undefined,
         "FAST",
       );
-      canvas.width = 0;
-      canvas.height = 0;
     }
     return pdf.output("blob");
   } finally {
-    host.remove();
+    for (const canvas of pages) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
   }
+}
+
+export async function excelBlob(form) {
+  const { default: ExcelJS } = await import("exceljs");
+  const wb = new ExcelJS.Workbook();
+  const s = wb.addWorksheet("الحالات", {
+    views: [{ rightToLeft: true, state: "frozen", ySplit: 4 }],
+    pageSetup: {
+      paperSize: 9,
+      orientation: "landscape",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+    },
+  });
+  const headers = [
+    "التاريخ",
+    "اسم الطالب",
+    "الشعبة",
+    "نوع الواقعة",
+    "الإجراء المتخذ",
+    "موعد المتابعة",
+  ];
+  const rows =
+    form.kind === "case" ? [form] : form.kind === "cases" ? form.rows : [];
+  if (!rows.length && !["case", "cases"].includes(form.kind)) {
+    const r = report(form);
+    s.name = "السجل";
+    s.addRow([r.school]);
+    s.addRow([r.title]);
+    for (const t of r.tables) {
+      s.addRow([t.title]);
+      s.addRow(t.columns);
+      t.rows.forEach((row) => s.addRow(row));
+    }
+    for (const section of r.sections) {
+      s.addRow([section.title]);
+      section.lines.forEach((row) => s.addRow(row));
+    }
+  } else {
+    s.mergeCells("A1:F1");
+    s.getCell("A1").value = form.school;
+    s.mergeCells("A2:F2");
+    s.getCell("A2").value = "سجل الحالات والمتابعة";
+    s.mergeCells("A3:F3");
+    s.getCell("A3").value =
+      `اسم المشرف: ${form.supervisor}    العام الدراسي: ${form.year}`;
+    s.addTable({
+      name: "Cases",
+      ref: "A4",
+      headerRow: true,
+      style: { theme: "TableStyleMedium2", showRowStripes: true },
+      columns: headers.map((name) => ({ name })),
+      rows: rows.map((v) =>
+        [
+          v.date,
+          v.student,
+          v.className,
+          v.type,
+          (v.action || "") +
+            (v.actionState === "مخطط للتنفيذ" ? " (مخطط للتنفيذ)" : ""),
+          v.due,
+        ].map((v) => String(v || "")),
+      ),
+    });
+    // Preserve additional case details in a second sheet when present.
+    if (form.kind === "case") {
+      const detail = wb.addWorksheet("تفاصيل", {
+        views: [{ rightToLeft: true }],
+      });
+      detail.columns = [{ width: 26 }, { width: 65 }];
+      const r = report(form);
+      detail.addRow([form.school]);
+      for (const section of r.sections) {
+        detail.addRow([section.title]);
+        section.lines.forEach((row) => detail.addRow(row));
+      }
+    }
+    s.pageSetup.printTitlesRow = "1:4";
+  }
+  s.columns.forEach((c, i) => (c.width = [16, 32, 12, 28, 32, 18][i] || 28));
+  for (const sheet of wb.worksheets)
+    sheet.eachRow((row) => {
+      row.height = 36;
+      row.eachCell((cell) => {
+        cell.font = { name: "Arial", size: 14 };
+        cell.alignment = {
+          readingOrder: "rtl",
+          vertical: "middle",
+          wrapText: true,
+        };
+      });
+    });
+  return new Blob([await wb.xlsx.writeBuffer()], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 }

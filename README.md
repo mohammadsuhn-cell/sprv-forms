@@ -1,9 +1,13 @@
 # نماذج الإشراف المدرسي
 
-Arabic phone forms, separate from the local sprv register. React/Vite static site. No API, accounts, analytics, or uploaded form data. School profiles, drafts and saved documents use this browser's localStorage. JSON backup/restore is available in Settings. Clearing browser data removes local records.
+Arabic phone case entry, separate from the local sprv register. The home screen offers case entry and saved records. School details carry over; six fields are visible by default. Additional details are optional. Saved records support due follow-ups and a six-column Excel export. Staffing and existing legacy daily/register drafts remain accessible in Settings; existing saved forms and backups keep the v1 storage format.
 
-Four forms: case register, case details, staffing/cover, daily report. Arabic Word exports use editable RTL paragraphs/tables. PDFs render Arabic locally into paginated images, preserving visual layout; PDF text is not selectable. The explicit Share button uses the phone's share sheet when available and otherwise downloads the file.
+No API, accounts, analytics, or uploaded form data. Drafts and records use this browser's localStorage. JSON backup/restore is available in Settings. Clearing browser data removes local records.
 
-`npm install`, `npm run dev`, `npm test`, `npm run build`.
+Arabic Word exports use editable RTL paragraphs and tables with explicit complex-script typography. PDF pages use the browser's native canvas text shaping on complete Arabic lines, with local fonts and pagination. PDF text is rasterized, not selectable. Excel exports preserve planned-action labels. The blank downloadable Excel workbook has six columns, a native table for mobile Cards View, dropdowns and school settings. Blank templates contain no student data.
+
+`npm install`, `npm run dev`, `npm test`, `npm run build`, `npm run check:production`.
+
+The production check uses synthetic records, a temporary browser context and a local preview. It verifies mobile entry, saved data, old drafts, PDF/Word/Excel, long table pagination and offline PDF. It does not access the live sprv register. Physical iPhone/Android validation remains a separate check.
 
 The build precaches static assets and export libraries for offline use after the first successful visit. Deploy only `dist/`. Never include student rosters, completed forms, backups or the local sprv database. Static hosting needs no domain purchase.

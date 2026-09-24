@@ -404,3 +404,30 @@ export function validateStore(value) {
     throw Error("Duplicate records");
   return { ...value, lang: value.lang === "en" ? "en" : "ar" };
 }
+
+// Aggregate saved individual cases without changing their IDs or historical school details.
+export function caseRegister(saved, profile = {}) {
+  const entries = saved.filter((s) => s.kind === "case");
+  const v = newForm("cases", profile);
+  v.simple = "yes";
+  v.rows = entries.map((s) => ({
+    ...newRow(groups.cases[0]),
+    date: s.date,
+    student: s.student || "",
+    className: s.className || "",
+    type: s.type || "",
+    description: s.description || "",
+    action:
+      (s.action || "") +
+      (s.action && s.actionState === "مخطط للتنفيذ" ? " (مخطط للتنفيذ)" : ""),
+    status: s.status || "",
+    due: s.due || "",
+  }));
+  const dates = entries
+    .map((s) => s.date)
+    .filter(Boolean)
+    .sort();
+  v.from = dates[0] || today();
+  v.to = dates.at(-1) || today();
+  return v;
+}

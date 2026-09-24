@@ -26,6 +26,8 @@ import "@fontsource/noto-sans-arabic/600.css";
 import "./style.css";
 import {
   titles,
+  fields,
+  caseRegister,
   groups,
   caseSections,
   newRow,
@@ -94,6 +96,20 @@ function Field({ field, value, onChange, lang }) {
   );
 }
 
+function OptionalPanel({ title, initialOpen = false, children }) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <details
+      className="panel optional"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>{title}</summary>
+      {children}
+    </details>
+  );
+}
+
 function App() {
   const [writeAllowed, setWriteAllowed] = useState(!initial.error);
   const [data, setData] = useState(initial.data),
@@ -104,6 +120,7 @@ function App() {
     [errors, setErrors] = useState([]),
     [busy, setBusy] = useState(""),
     [query, setQuery] = useState(""),
+    [dueOnly, setDueOnly] = useState(false),
     [readyFile, setReadyFile] = useState(null);
   const restoreRef = useRef(),
     messageTimer = useRef();
@@ -145,6 +162,8 @@ function App() {
   }
   function change(key, value) {
     setDraft({ ...form, [key]: value });
+    if (["school", "supervisor", "year"].includes(key))
+      setData((d) => ({ ...d, profile: { ...d.profile, [key]: value } }));
   }
   function openKind(k) {
     setKind(k);
@@ -157,6 +176,9 @@ function App() {
   }
   function startNew() {
     if (
+      !data.saved.some(
+        (s) => s.id === form.id && JSON.stringify(s) === JSON.stringify(form),
+      ) &&
       !confirm(
         t(
           "بدء نموذج جديد؟ ستُحذف المسودة الحالية، وتبقى النسخ المحفوظة.",
@@ -183,18 +205,24 @@ function App() {
     setData((d) => ({
       ...d,
       saved: [saved, ...d.saved.filter((s) => s.id !== form.id)],
+      drafts: { ...d.drafts, [form.kind]: saved },
     }));
-    notify(t("حُفظت النسخة", "Copy saved"));
+    notify(t("تم الحفظ", "Saved"));
+    setPage("saved");
   }
-  async function exportFile(type) {
-    if (!check()) return;
+  async function exportFile(type, target = form) {
+    if (target === form && !check()) return;
     setBusy(type);
     setReadyFile(null);
     try {
       const lib = await import("./exports.js");
       const blob =
-        type === "pdf" ? await lib.pdfBlob(form) : await lib.wordBlob(form);
-      const name = fileName(form, type === "pdf" ? "pdf" : "docx");
+        type === "pdf"
+          ? await lib.pdfBlob(target)
+          : type === "xlsx"
+            ? await lib.excelBlob(target)
+            : await lib.wordBlob(target);
+      const name = fileName(target, type === "word" ? "docx" : type);
       download(blob, name);
       setReadyFile({ blob, name });
       notify(t("تم تجهيز الملف", "File ready"));
@@ -217,7 +245,7 @@ function App() {
     });
     try {
       if (navigator.canShare?.({ files: [file] }))
-        await navigator.share({ files: [file], title: titles[kind][0] });
+        await navigator.share({ files: [file], title: readyFile.name });
       else download(readyFile.blob, readyFile.name);
     } catch (e) {
       if (e.name !== "AbortError")
@@ -335,7 +363,7 @@ function App() {
               <h1>{t("النماذج", "Forms")}</h1>
               <button className="button" onClick={() => setPage("saved")}>
                 <FolderOpen size={18} />
-                {t("المحفوظات", "Saved")}
+                {t("السجلات والمتابعة", "Records & follow-up")}
                 <span className="count">{data.saved.length}</span>
               </button>
             </div>
@@ -358,33 +386,13 @@ function App() {
               </div>
             )}
             <div className="form-cards">
-              {Object.entries(titles).map(([k, title], i) => {
-                const Icon = [ClipboardList, FileText, Users, CalendarDays][i];
-                return (
-                  <button
-                    key={k}
-                    className="form-card"
-                    onClick={() => openKind(k)}
-                  >
-                    <span className="card-icon">
-                      <Icon size={25} />
-                    </span>
-                    <div>
-                      <h2>{title[en ? 1 : 0]}</h2>
-                      <span>
-                        {data.drafts[k]
-                          ? t("متابعة المسودة", "Continue draft")
-                          : t("نموذج جديد", "New form")}
-                      </span>
-                    </div>
-                    {en ? (
-                      <ChevronRight size={20} />
-                    ) : (
-                      <ChevronLeft size={20} />
-                    )}
-                  </button>
-                );
-              })}
+              <button className="form-card" onClick={() => openKind("case")}>
+                <Plus size={23} />
+                <div>
+                  <h2>{t("تسجيل حالة", "Record a case")}</h2>
+                </div>
+                {en ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+              </button>
             </div>
             {data.saved.length > 0 && (
               <section className="recent">
@@ -402,21 +410,17 @@ function App() {
                 ))}
               </section>
             )}
-            <a
-              className="templates"
-              href="./School-Supervision-Word-Forms.zip"
-              download
-            >
-              <Download size={17} />
-              {t("قوالب Word الفارغة", "Blank Word templates")}
-            </a>
           </>
         )}
         {page === "form" && form && (
           <>
             <div className="page-heading">
               <div>
-                <h1>{titles[kind][en ? 1 : 0]}</h1>
+                <h1>
+                  {kind === "case"
+                    ? t("تسجيل حالة", "Record a case")
+                    : titles[kind][en ? 1 : 0]}
+                </h1>
                 <span className="small-status">
                   {storageError
                     ? t("غير محفوظ", "Not saved")
@@ -435,12 +439,16 @@ function App() {
                 ))}
               </div>
             )}
-            <section className="panel">
+            <OptionalPanel
+              key={form.id}
+              initialOpen={!form.school || !form.supervisor}
+              title={form.school || t("بيانات المدرسة", "School details")}
+            >
               <div className="fields">
                 {field("school", "اسم المدرسة", "School")}
                 {field("supervisor", "اسم المشرف", "Supervisor")}
                 {field("year", "العام الدراسي", "School year")}
-                {field("date", "التاريخ", "Date", "date")}
+                {kind !== "case" && field("date", "التاريخ", "Date", "date")}
                 {kind === "cases" && (
                   <>
                     {field("from", "من تاريخ", "From", "date")}
@@ -448,90 +456,147 @@ function App() {
                   </>
                 )}
               </div>
-            </section>
-            {kind === "case"
-              ? caseSections.map((section) => (
-                  <section className="panel" key={section.ar}>
-                    {sectionTitle(section.ar, section.en)}
-                    <div className="fields">
-                      {section.fields.map((f) => (
-                        <Field
-                          lang={data.lang}
-                          key={f.key}
-                          field={f}
-                          value={form[f.key]}
-                          onChange={(v) => change(f.key, v)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))
-              : groups[kind].map((group) => (
-                  <section className="panel group" key={group.key}>
-                    <div className="section-heading">
-                      {sectionTitle(group.ar, group.en)}
-                      <span className="count">{form[group.key].length}</span>
-                    </div>
-                    {form[group.key].map((row, index) => (
-                      <div className="entry" key={row.id}>
-                        <div className="entry-head">
-                          <span>
-                            {t("سجل", "Entry")} {index + 1}
-                          </span>
-                          <button
-                            className="icon danger"
-                            aria-label={t("حذف السجل", "Delete entry")}
-                            onClick={() => {
-                              if (
-                                Object.entries(row).some(
-                                  ([k, v]) => k !== "id" && v,
-                                ) &&
-                                !confirm(
-                                  t("حذف هذا السجل؟", "Delete this entry?"),
-                                )
-                              )
-                                return;
-                              change(
-                                group.key,
-                                form[group.key].filter((r) => r.id !== row.id),
-                              );
-                            }}
-                          >
-                            <Trash2 size={17} />
-                          </button>
-                        </div>
-                        <div className="fields">
-                          {group.fields.map((f) => (
+            </OptionalPanel>
+            {kind === "case" ? (
+              <>
+                <section className="panel">
+                  <div className="fields">
+                    {[
+                      fields.date,
+                      fields.student,
+                      fields.className,
+                      fields.type,
+                      fields.action,
+                      {
+                        ...fields.due,
+                        ar: "موعد المتابعة (اختياري)",
+                        en: "Follow-up date (optional)",
+                      },
+                    ].map((f) => (
+                      <Field
+                        key={f.key}
+                        lang={data.lang}
+                        field={f}
+                        value={form[f.key]}
+                        onChange={(v) => {
+                          const next = { ...form, [f.key]: v };
+                          if (
+                            f.key === "action" &&
+                            !form.actionState &&
+                            v &&
+                            v !== "لم يُتخذ إجراء بعد"
+                          )
+                            next.actionState = "تم التنفيذ";
+                          if (
+                            f.key === "action" &&
+                            (!v || v === "لم يُتخذ إجراء بعد")
+                          )
+                            next.actionState = "";
+                          setDraft(next);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </section>
+                <details className="panel optional">
+                  <summary>{t("تفاصيل إضافية", "Additional details")}</summary>
+                  {caseSections.map((section) => (
+                    <section key={section.ar}>
+                      {sectionTitle(section.ar, section.en)}
+                      <div className="fields">
+                        {section.fields
+                          .filter(
+                            (f) =>
+                              ![
+                                "student",
+                                "className",
+                                "type",
+                                "action",
+                                "due",
+                              ].includes(f.key),
+                          )
+                          .map((f) => (
                             <Field
-                              lang={data.lang}
                               key={f.key}
+                              lang={data.lang}
                               field={f}
-                              value={row[f.key]}
-                              onChange={(v) =>
-                                change(
-                                  group.key,
-                                  form[group.key].map((r) =>
-                                    r.id === row.id ? { ...r, [f.key]: v } : r,
-                                  ),
-                                )
-                              }
+                              value={form[f.key]}
+                              onChange={(v) => change(f.key, v)}
                             />
                           ))}
-                        </div>
                       </div>
-                    ))}
-                    <button
-                      className="button add-row"
-                      disabled={form[group.key].length >= 100}
-                      onClick={() =>
-                        change(group.key, [...form[group.key], newRow(group)])
-                      }
-                    >
-                      <Plus size={18} />
-                      {t("إضافة سجل", "Add entry")}
-                    </button>
-                  </section>
-                ))}
+                    </section>
+                  ))}
+                </details>
+              </>
+            ) : (
+              groups[kind].map((group) => (
+                <section className="panel group" key={group.key}>
+                  <div className="section-heading">
+                    {sectionTitle(group.ar, group.en)}
+                    <span className="count">{form[group.key].length}</span>
+                  </div>
+                  {form[group.key].map((row, index) => (
+                    <div className="entry" key={row.id}>
+                      <div className="entry-head">
+                        <span>
+                          {t("سجل", "Entry")} {index + 1}
+                        </span>
+                        <button
+                          className="icon danger"
+                          aria-label={t("حذف السجل", "Delete entry")}
+                          onClick={() => {
+                            if (
+                              Object.entries(row).some(
+                                ([k, v]) => k !== "id" && v,
+                              ) &&
+                              !confirm(
+                                t("حذف هذا السجل؟", "Delete this entry?"),
+                              )
+                            )
+                              return;
+                            change(
+                              group.key,
+                              form[group.key].filter((r) => r.id !== row.id),
+                            );
+                          }}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                      <div className="fields">
+                        {group.fields.map((f) => (
+                          <Field
+                            lang={data.lang}
+                            key={f.key}
+                            field={f}
+                            value={row[f.key]}
+                            onChange={(v) =>
+                              change(
+                                group.key,
+                                form[group.key].map((r) =>
+                                  r.id === row.id ? { ...r, [f.key]: v } : r,
+                                ),
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    className="button add-row"
+                    disabled={form[group.key].length >= 100}
+                    onClick={() =>
+                      change(group.key, [...form[group.key], newRow(group)])
+                    }
+                  >
+                    <Plus size={18} />
+                    {t("إضافة سجل", "Add entry")}
+                  </button>
+                </section>
+              ))
+            )}
             {kind !== "case" && (
               <section className="panel">
                 {field(
@@ -553,33 +618,36 @@ function App() {
               </div>
             )}
             <div className="action-bar">
-              <button className="button" disabled={!!busy} onClick={save}>
-                <Check size={18} />
-                {t("حفظ نسخة", "Save copy")}
-              </button>
-              <button
-                className="button"
-                disabled={!!busy}
-                onClick={() => exportFile("word")}
-              >
-                <Download size={18} />
-                {busy === "word" ? t("جارٍ التجهيز", "Preparing") : "Word"}
-              </button>
               <button
                 className="button primary"
                 disabled={!!busy}
-                onClick={() => exportFile("pdf")}
+                onClick={save}
               >
-                <Download size={18} />
-                {busy === "pdf" ? t("جارٍ التجهيز", "Preparing") : "PDF"}
+                <Check size={18} />
+                {t("حفظ الحالة", "Save record")}
               </button>
+              <details className="export-menu">
+                <summary className="button">{t("تصدير", "Export")}</summary>
+                <div>
+                  {["pdf", "word", "xlsx"].map((type) => (
+                    <button
+                      key={type}
+                      className="button"
+                      disabled={!!busy}
+                      onClick={() => exportFile(type)}
+                    >
+                      {type === "word" ? "Word" : type.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </details>
             </div>
           </>
         )}
         {page === "saved" && (
           <>
             <div className="page-heading">
-              <h1>{t("المحفوظات", "Saved forms")}</h1>
+              <h1>{t("السجلات والمتابعة", "Records & follow-up")}</h1>
               <span className="count">{data.saved.length}</span>
             </div>
             <label className="search">
@@ -591,16 +659,75 @@ function App() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </label>
+            <div className="record-tools">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={dueOnly}
+                  onChange={(e) => setDueOnly(e.target.checked)}
+                />{" "}
+                {t("متابعات مستحقة", "Follow-ups due")}
+              </label>
+              <button
+                className="button"
+                disabled={!!busy || !data.saved.some((s) => s.kind === "case")}
+                onClick={() =>
+                  exportFile(
+                    "xlsx",
+                    caseRegister(
+                      data.saved
+                        .filter(
+                          (s) =>
+                            !dueOnly ||
+                            (s.due &&
+                              s.due <= today() &&
+                              !["مغلقة", "تمت المتابعة"].includes(s.status)),
+                        )
+                        .filter((s) =>
+                          JSON.stringify(s)
+                            .toLowerCase()
+                            .includes(query.toLowerCase()),
+                        ),
+                      data.profile,
+                    ),
+                  )
+                }
+              >
+                {t("تصدير Excel", "Export Excel")}
+              </button>
+            </div>
+            {readyFile && (
+              <div className="file-ready">
+                <span>{readyFile.name}</span>
+                <button className="button" onClick={share}>
+                  {t("مشاركة", "Share")}
+                </button>
+              </div>
+            )}
             <section className="panel saved-list">
               {data.saved
-                .filter((s) =>
-                  JSON.stringify(s).toLowerCase().includes(query.toLowerCase()),
+                .filter(
+                  (s) =>
+                    JSON.stringify(s)
+                      .toLowerCase()
+                      .includes(query.toLowerCase()) &&
+                    (!dueOnly ||
+                      (s.due &&
+                        s.due <= today() &&
+                        !["مغلقة", "تمت المتابعة"].includes(s.status))),
                 )
                 .map((s) => (
                   <SavedRow key={s.id} item={s} remove />
                 ))}
-              {!data.saved.filter((s) =>
-                JSON.stringify(s).toLowerCase().includes(query.toLowerCase()),
+              {!data.saved.filter(
+                (s) =>
+                  JSON.stringify(s)
+                    .toLowerCase()
+                    .includes(query.toLowerCase()) &&
+                  (!dueOnly ||
+                    (s.due &&
+                      s.due <= today() &&
+                      !["مغلقة", "تمت المتابعة"].includes(s.status))),
               ).length && (
                 <p className="empty">
                   {t("لا توجد نماذج محفوظة", "No saved forms")}
@@ -695,6 +822,37 @@ function App() {
                 onChange={restore}
               />
             </section>
+            <details className="panel optional">
+              <summary>{t("ملفات ونماذج أخرى", "Other files & forms")}</summary>
+              <a
+                className="templates"
+                href="./نماذج-الإشراف-المبسطة.xlsx"
+                download
+              >
+                {t("نموذج Excel", "Excel template")}
+              </a>
+              <a
+                className="templates"
+                href="./School-Supervision-Word-Forms.zip"
+                download
+              >
+                {t("قوالب Word", "Word templates")}
+              </a>
+              <button className="button" onClick={() => openKind("staffing")}>
+                {t("المعلمون والبدلاء", "Staff & cover")}
+              </button>
+              {Object.entries(data.drafts)
+                .filter(([k]) => ["daily", "cases"].includes(k))
+                .map(([k]) => (
+                  <button
+                    className="button"
+                    key={k}
+                    onClick={() => openKind(k)}
+                  >
+                    {titles[k][en ? 1 : 0]}
+                  </button>
+                ))}
+            </details>
             <section className="panel">
               {sectionTitle("اختصار على الهاتف", "Phone shortcut")}
               <p className="settings-note">
@@ -754,7 +912,15 @@ function App() {
           <div>
             <strong>{item.student || titles[item.kind][en ? 1 : 0]}</strong>
             <span>
-              {dateLabel(item.date)} · {titles[item.kind][en ? 1 : 0]}
+              {dateLabel(item.date)} ·{" "}
+              {item.className || titles[item.kind][en ? 1 : 0]}
+              {item.due && (
+                <span>
+                  {t("المتابعة: ", "Follow-up: ")}
+                  {dateLabel(item.due)}
+                  {item.status ? " · " + item.status : ""}
+                </span>
+              )}
             </span>
           </div>
         </button>

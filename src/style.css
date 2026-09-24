@@ -689,3 +689,118 @@ h2 {
     scroll-behavior: auto !important;
   }
 }
+
+/* Keep the phone workflow focused on entry, records and export. */
+:root {
+  --ink: #353735;
+  --muted: #60635f;
+  --line: #dcdedb;
+  color: #30332f;
+  background: #f5f5f3;
+}
+.content {
+  max-width: 720px;
+}
+.brand-icon,
+.brand div > span {
+  display: none;
+}
+.topbar {
+  height: 68px;
+}
+.button,
+.panel,
+.form-card,
+.search,
+.setup {
+  border-radius: 4px;
+}
+.button.primary:hover {
+  background: #484b47;
+}
+.form-cards {
+  grid-template-columns: 1fr;
+}
+.form-card {
+  min-height: 78px;
+  padding: 18px;
+}
+.form-card h2 {
+  margin: 0;
+}
+.optional summary {
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+}
+.optional[open] > .fields,
+.optional[open] > section {
+  margin-top: 22px;
+}
+.optional > section + section {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.optional h2 {
+  font-size: 16px;
+}
+.field > span {
+  color: #444942;
+  font-size: 15px;
+}
+.record-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.record-tools label {
+  font-size: 14px;
+}
+.record-tools input {
+  accent-color: var(--ink);
+}
+.export-menu {
+  position: relative;
+}
+.export-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+.export-menu > div {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  inset-inline-end: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 5px 18px #0001;
+}
+.export-menu summary::-webkit-details-marker {
+  display: none;
+}
+.action-bar .primary {
+  flex: 1;
+  max-width: 460px;
+}
+.export-menu .button {
+  min-width: 100px;
+}
+.saved-open span {
+  font-size: 14px;
+}
+.optional .templates {
+  margin: 16px 0;
+}
+@media (max-width: 600px) {
+  .action-bar > .export-menu {
+    flex: 0 0 100px;
+  }
+  .export-menu summary {
+    width: 100%;
+  }
+}

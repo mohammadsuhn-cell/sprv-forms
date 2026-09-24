@@ -1,3 +1,5 @@
 * text=auto
 *.zip binary
 *.png binary
+
+*.xlsx binary

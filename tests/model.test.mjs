@@ -74,3 +74,31 @@ test("register validates inverted dates and omits unused rows", () => {
   assert.equal(report(v).tables[0].rows.length, 1);
   assert(validateForm(v).length);
 });
+
+test("simple register preserves planned actions and includes only individual cases", async () => {
+  const { caseRegister } = await import("../src/model.js");
+  const a = newForm("case", { school: "مدرسة", supervisor: "مشرف" });
+  Object.assign(a, {
+    student: "طالب",
+    date: "2026-09-22",
+    action: "إنذار أول",
+    actionState: "مخطط للتنفيذ",
+    due: "2026-09-25",
+  });
+  const r = caseRegister([a, newForm("daily")], {
+    school: "مدرسة",
+    supervisor: "مشرف",
+  });
+  assert.equal(r.rows.length, 1);
+  assert.equal(r.rows[0].action, "إنذار أول (مخطط للتنفيذ)");
+  assert.equal(r.from, "2026-09-22");
+  assert.equal(r.to, "2026-09-22");
+  assert.equal(r.rows[0].due, "2026-09-25");
+  const store = emptyStore();
+  store.saved = [a];
+  store.drafts.daily = newForm("daily");
+  assert.equal(
+    validateStore(JSON.parse(JSON.stringify(store))).drafts.daily.kind,
+    "daily",
+  );
+});

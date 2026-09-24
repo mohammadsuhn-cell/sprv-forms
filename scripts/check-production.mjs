@@ -2,6 +2,7 @@ import { chromium } from "@playwright/test";
 import { spawn, execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import ExcelJS from "exceljs";
 import {
   newForm,
   newRow,
@@ -9,6 +10,7 @@ import {
   emptyStore,
   storageKey,
 } from "../src/model.js";
+fs.mkdirSync("test-results", { recursive: true });
 const server = spawn(
   process.execPath,
   [
@@ -17,18 +19,17 @@ const server = spawn(
     "--host",
     "127.0.0.1",
     "--port",
-    "4319",
+    "4320",
   ],
   { stdio: "pipe" },
 );
-const wait = () => new Promise((r) => setTimeout(r, 200));
 let browser;
 try {
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 50; i++) {
     try {
-      if ((await fetch("http://127.0.0.1:4319")).ok) break;
+      if ((await fetch("http://127.0.0.1:4320")).ok) break;
     } catch {}
-    await wait();
+    await new Promise((r) => setTimeout(r, 150));
   }
   browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -37,101 +38,192 @@ try {
     hasTouch: true,
     acceptDownloads: true,
   });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
   const state = emptyStore();
   state.profile = {
     school: "مدرسة الاختبار",
     supervisor: "مشرف تجريبي",
     year: "٢٠٢٦/٢٠٢٧",
   };
-  for (const kind of ["cases", "daily", "staffing"]) {
+  for (const kind of ["daily", "cases"]) {
     const v = newForm(kind, state.profile);
-    for (const g of groups[kind]) {
-      v[g.key] = Array.from({ length: kind === "cases" ? 16 : 2 }, (_, i) => {
+    for (const g of groups[kind])
+      v[g.key] = Array.from({ length: kind === "cases" ? 18 : 1 }, (_, i) => {
         const r = newRow(g);
         for (const f of g.fields)
           r[f.key] =
             f.kind === "date"
               ? "2026-09-24"
-              : f.kind === "time"
-                ? "09:00"
+              : f.kind === "number"
+                ? "0"
                 : f.kind === "select"
                   ? f.options[1]
-                  : f.kind === "number"
-                    ? "0"
-                    : f.key === "className"
-                      ? "٧/٢"
-                      : f.kind === "textarea"
-                        ? `نص تجريبي للسجل ${i + 1}. `.repeat(
-                            kind === "cases" ? 30 : 2,
-                          )
-                        : `بيان تجريبي ${i + 1}`;
+                  : f.kind === "textarea"
+                    ? `تفاصيل الحالة التجريبية ${i + 1} ومتابعة الطالب. `.repeat(
+                        25,
+                      )
+                    : `بيان تجريبي ${i + 1}`;
         return r;
       });
-    }
     state.drafts[kind] = v;
   }
   await ctx.addInitScript(
     ({ key, value }) => {
       if (!localStorage.getItem(key))
         localStorage.setItem(key, JSON.stringify(value));
+      window.drawnLines = [];
+      const draw = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        window.drawnLines.push(String(text));
+        return draw.call(this, text, ...args);
+      };
     },
     { key: storageKey, value: state },
   );
-  await page.goto("http://127.0.0.1:4319/");
+  const page = await ctx.newPage(),
+    errors = [],
+    uploads = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("request", (r) => {
+    if (!["GET", "HEAD"].includes(r.method())) uploads.push(r.url());
+  });
+  await page.goto("http://127.0.0.1:4320/");
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller);
-  for (const [kind, label] of [
-    ["cases", "سجل الحالات والمتابعة"],
-    ["daily", "التقرير اليومي للإشراف"],
-    ["staffing", "غياب المعلمين والبدلاء"],
-  ]) {
-    await page.locator(".form-card").filter({ hasText: label }).click();
-    assert(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
+  assert.equal(await page.locator(".form-card").count(), 1);
+  assert.equal(
+    await page.getByText("التقرير اليومي للإشراف", { exact: true }).count(),
+    0,
+  );
+  await page.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
+  assert.equal(
+    await page.locator("input:visible,select:visible,textarea:visible").count(),
+    6,
+  );
+  await page
+    .getByLabel("اسم الطالب", { exact: true })
+    .fill("عبدالرحمن عبدالله طالب تجريبي");
+  await page.getByLabel("الشعبة", { exact: true }).fill("٧/٢");
+  await page
+    .getByLabel("نوع الواقعة", { exact: true })
+    .selectOption("التأخر عن الحصة");
+  await page
+    .getByLabel("الإجراء المتخذ", { exact: true })
+    .selectOption("إنذار أول");
+  await page
+    .getByLabel("موعد المتابعة (اختياري)", { exact: true })
+    .fill("2026-09-24");
+  assert(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await page.screenshot({
+    path: "test-results/simple-phone.png",
+    fullPage: true,
+  });
+  await page.getByText("تفاصيل إضافية", { exact: true }).click();
+  await page
+    .getByLabel("وصف الواقعة", { exact: true })
+    .fill(
+      "تأخر الطالب عن الحصة الأولى. تم التواصل مع ولي الأمر لمتابعة الانتظام. الشعبة ٧/٢، الموعد 09:00.",
     );
-    const downloading = page.waitForEvent("download", { timeout: 120000 });
-    await page.getByRole("button", { name: "PDF", exact: true }).click();
-    await page.waitForSelector(".export-host", { state: "attached" });
-    const layout = await page.evaluate(() => ({
-      pages: document.querySelectorAll(".paper").length,
-      overflow: [...document.querySelectorAll(".paper-body")].some(
-        (e) => e.scrollHeight > e.clientHeight + 1,
-      ),
-      text: document.querySelector(".export-host").textContent,
-    }));
-    assert(!layout.overflow, `${kind}: clipping`);
-    if (kind === "cases") {
-      assert(layout.pages > 1);
-      assert(layout.text.includes("بيان تجريبي 16"));
-    }
-    const dl = await downloading;
-    await dl.saveAs(`test-results/${kind}.pdf`);
-    console.log(`PASS ${kind}: ${layout.pages} PDF pages, no clipped content.`);
-    if (kind === "staffing") {
-      const wd = page.waitForEvent("download");
-      await page.getByRole("button", { name: "Word", exact: true }).click();
-      await (await wd).saveAs("test-results/staffing.docx");
-    }
-    await page.getByRole("button", { name: "النماذج", exact: true }).click();
+  await page
+    .getByLabel("حالة الإجراء", { exact: true })
+    .selectOption("مخطط للتنفيذ");
+  await page.getByRole("button", { name: "حفظ الحالة", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "السجلات والمتابعة", exact: true })
+    .waitFor();
+  await page.locator(".saved-open").click();
+  await page.getByText("تصدير", { exact: true }).click();
+  for (const [label, ext] of [
+    ["PDF", "pdf"],
+    ["Word", "docx"],
+    ["XLSX", "xlsx"],
+  ]) {
+    const waiting = page.waitForEvent("download", { timeout: 60000 });
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await (await waiting).saveAs(`test-results/simple-case.${ext}`);
   }
+  const drawn = await page.evaluate(() => window.drawnLines.join("\n"));
+  assert(drawn.includes("تأخر الطالب عن الحصة الأولى."));
+  assert(drawn.includes("مخطط للتنفيذ"));
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile("test-results/simple-case.xlsx");
+  assert.equal(
+    wb.worksheets[0].getCell("E5").value,
+    "إنذار أول (مخطط للتنفيذ)",
+  );
+  await page.getByRole("button", { name: "النماذج", exact: true }).click();
+  await page.getByRole("button", { name: /السجلات والمتابعة/ }).click();
+  await page.getByLabel("متابعات مستحقة", { exact: true }).check();
+  assert.equal(await page.locator(".saved-open").count(), 1);
+  const register = page.waitForEvent("download");
+  await page.getByRole("button", { name: "تصدير Excel", exact: true }).click();
+  await (await register).saveAs("test-results/simple-register.xlsx");
+  await page.getByRole("button", { name: "الإعدادات", exact: true }).click();
+  await page.getByText("ملفات ونماذج أخرى", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "سجل الحالات والمتابعة", exact: true })
+    .click();
+  await page.getByText("تصدير", { exact: true }).click();
+  const longDownload = page.waitForEvent("download", { timeout: 120000 });
+  await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await (await longDownload).saveAs("test-results/long-register.pdf");
+  assert(
+    (await page.evaluate(() => window.drawnLines.join("\n"))).includes(
+      "بيان تجريبي 18",
+    ),
+  );
+  const info = execFileSync("pdfinfo", ["test-results/long-register.pdf"], {
+    encoding: "utf8",
+  });
+  assert(Number(info.match(/Pages:\s+(\d+)/)[1]) > 1);
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+  assert.equal(await page.locator("html").getAttribute("dir"), "ltr");
+  await page.getByRole("button", { name: "Forms", exact: true }).click();
   await ctx.setOffline(true);
   await page.reload();
-  await page.getByRole("heading", { name: "النماذج", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Forms", exact: true }).waitFor();
   await page
-    .locator(".form-card")
-    .filter({ hasText: "التقرير اليومي للإشراف" })
+    .getByRole("button", { name: "Record a case", exact: true })
     .click();
-  const word = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Word", exact: true }).click();
-  await (await word).saveAs("test-results/offline.docx");
+  assert.equal(
+    await page.getByLabel("Student name", { exact: true }).inputValue(),
+    "عبدالرحمن عبدالله طالب تجريبي",
+  );
+  await page.getByText("Export", { exact: true }).click();
+  const offline = page.waitForEvent("download");
+  await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await (await offline).saveAs("test-results/offline-case.pdf");
+  const data = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)),
+    storageKey,
+  );
+  assert.equal(data.saved.length, 1);
+  assert(data.drafts.daily);
+  const fresh = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const entry = await fresh.newPage();
+  await entry.goto("http://127.0.0.1:4320/");
+  await entry.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
+  await entry.getByLabel("اسم المدرسة", { exact: true }).fill("مدرسة جديدة");
+  await entry
+    .getByLabel("اسم المشرف", { exact: true })
+    .pressSequentially("المشرف الجديد");
+  assert.equal(
+    await entry.getByLabel("اسم المشرف", { exact: true }).inputValue(),
+    "المشرف الجديد",
+  );
+  assert(await entry.getByLabel("اسم المشرف", { exact: true }).isVisible());
+  await fresh.close();
   assert.deepEqual(errors, []);
-  console.log("PASS production: offline reload and offline Word export.");
+  assert.deepEqual(uploads, []);
+  console.log(
+    "PASS: six-field mobile entry, local save/edit, planned action preserved, Word/PDF/Excel, long Arabic table pagination, legacy drafts retained, English, offline PDF and zero form uploads.",
+  );
 } finally {
   if (browser) await browser.close();
   server.kill();
