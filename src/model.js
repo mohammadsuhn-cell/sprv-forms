@@ -1,3 +1,7 @@
+export const letterhead = Object.freeze({
+  ministry: "وزارة التربية",
+  district: "منطقة الفروانية التعليمية",
+});
 export const schoolIdentity = Object.freeze({
   school: "مدرسة عمار بن ياسر المتوسطة للبنين",
   year: "٢٠٢٦/٢٠٢٧",
@@ -6,9 +10,23 @@ export const withSchoolIdentity = (value) => ({ ...value, ...schoolIdentity });
 export const titles = {
   cases: ["سجل الحالات والمتابعة", "Case register"],
   case: ["تفاصيل الحالة", "Case details"],
-  staffing: ["غياب المعلمين والبدلاء", "Staff absence & cover"],
-  daily: ["التقرير اليومي للإشراف", "Daily report"],
+  staffing: ["سجل المعلمين والبدلاء", "Teachers & substitutes"],
+  daily: ["الموجز اليومي", "Daily brief"],
+  late: ["الطلبة المتأخرون", "Late students"],
 };
+export const grades = [
+  "الصف السادس",
+  "الصف السابع",
+  "الصف الثامن",
+  "الصف التاسع",
+];
+export function classesForGrade(grade) {
+  const index = grades.indexOf(grade);
+  if (index < 0) return [];
+  return Array.from({ length: index === 1 ? 6 : 10 }, (_, i) =>
+    arDigits(`${index + 6}/${i + 1}`),
+  );
+}
 export const types = [
   "التأخر عن الحصة",
   "عدم حضور الحصة",
@@ -110,6 +128,33 @@ export const groups = {
     },
   ],
   case: [],
+  late: [
+    {
+      key: "students",
+      ar: "أسماء الطلبة",
+      en: "Students",
+      fields: [
+        fields.student,
+        f("arrival", "وقت الوصول (اختياري)", "Arrival time (optional)", "time"),
+        f("reason", "سبب التأخر (اختياري)", "Reason (optional)", "select", [
+          "تأخر وسيلة النقل",
+          "ازدحام مروري",
+          "الاستيقاظ متأخرًا",
+          "ظرف أسري",
+          "موعد طبي",
+          "لم يُذكر السبب",
+          "سبب آخر",
+        ]),
+        f(
+          "action",
+          "الإجراء (اختياري)",
+          "Action (optional)",
+          "select",
+          actions,
+        ),
+      ],
+    },
+  ],
   staffing: [
     {
       key: "absences",
@@ -144,12 +189,19 @@ export const groups = {
   daily: [
     {
       key: "attendance",
-      ar: "الحضور والحالات",
-      en: "Attendance & cases",
+      ar: "الحضور والتأخر الصباحي",
+      en: "Attendance & morning lateness",
       fields: [
         fields.className,
         f("present", "الحاضرون", "Present", "number"),
         f("absent", "الغائبون", "Absent", "number"),
+        f("lateCount", "المتأخرون صباحًا", "Morning late arrivals", "number"),
+        f(
+          "lateNames",
+          "أسماء المتأخرين (اختياري)",
+          "Late students (optional)",
+          "textarea",
+        ),
         f("cases", "الحالات المسجلة", "Cases", "number"),
       ],
     },
@@ -248,6 +300,11 @@ export function newForm(kind, profile = {}) {
     notes: "",
     createdAt: new Date().toISOString(),
   };
+  if (kind === "daily") form.decisions = "";
+  if (kind === "late") {
+    form.grade = "";
+    form.className = "";
+  }
   if (kind === "cases") {
     form.from = today();
     form.to = today();
@@ -270,6 +327,15 @@ export function report(form) {
   const sections = [],
     tables = [];
   const meta = [["التاريخ", dateLabel(form.date)]];
+  if (form.kind === "late")
+    meta.push(
+      ["الصف", form.grade],
+      ["الشعبة", form.className],
+      [
+        "عدد المتأخرين",
+        arDigits(form.students.filter((row) => row.student?.trim()).length),
+      ],
+    );
   if (form.kind === "cases") {
     meta.splice(
       0,
@@ -290,27 +356,51 @@ export function report(form) {
     }
   } else
     for (const group of groups[form.kind]) {
-      const rows = (form[group.key] || [])
-        .filter(isRowFilled)
-        .map((row) =>
-          group.fields.map((f) =>
-            f.kind === "date"
-              ? dateLabel(row[f.key])
-              : f.kind === "number"
-                ? arDigits(row[f.key])
-                : row[f.key] || "",
-          ),
-        );
+      const filled = (form[group.key] || []).filter(isRowFilled);
+      const displayFields = group.fields.filter(
+        (f) =>
+          f.key !== "lateNames" &&
+          (form.kind !== "late" ||
+            f.key === "student" ||
+            filled.some((row) => String(row[f.key] ?? "").trim() !== "")) &&
+          (!["cases", "notifiedTime"].includes(f.key) ||
+            filled.some((row) => String(row[f.key] ?? "").trim() !== "")),
+      );
+      const rows = filled.map((row) =>
+        displayFields.map((f) =>
+          f.kind === "date"
+            ? dateLabel(row[f.key])
+            : f.kind === "number"
+              ? arDigits(row[f.key])
+              : row[f.key] || "",
+        ),
+      );
       if (rows.length)
         tables.push({
           title: group.ar,
-          columns: group.fields.map((f) => f.ar),
+          columns: displayFields.map((f) => f.ar),
           rows,
         });
+      if (group.key === "attendance") {
+        const names = filled
+          .filter((row) => row.lateNames?.trim())
+          .map((row) => [row.className || "", row.lateNames]);
+        if (names.length)
+          sections.push({ title: "أسماء المتأخرين صباحًا", lines: names });
+      }
     }
   if (form.notes?.trim())
-    sections.push({ title: "ملاحظات المشرف", lines: [["", form.notes]] });
+    sections.push({
+      title: form.kind === "daily" ? "ملاحظات اليوم" : "ملاحظات المشرف",
+      lines: [["", form.notes]],
+    });
+  if (form.kind === "daily" && form.decisions?.trim())
+    sections.push({
+      title: "الإجراءات والمتابعة",
+      lines: [["", form.decisions]],
+    });
   return {
+    ...letterhead,
     title: titles[form.kind][0],
     school: form.school,
     year: form.year,
@@ -330,6 +420,21 @@ export function validateForm(v) {
   if (!v.date) errors.push(["حدد التاريخ.", "Choose a date."]);
   if (v.kind === "case" && !v.student?.trim())
     errors.push(["أدخل اسم الطالب.", "Enter the student name."]);
+  if (v.kind === "late") {
+    if (!grades.includes(v.grade))
+      errors.push(["اختر الصف.", "Choose a grade."]);
+    if (!classesForGrade(v.grade).includes(v.className))
+      errors.push([
+        "اختر الشعبة التابعة للصف.",
+        "Choose a class in this grade.",
+      ]);
+    const rows = v.students.filter(isRowFilled);
+    if (!rows.length || rows.some((row) => !row.student?.trim()))
+      errors.push([
+        "أدخل اسم كل طالب متأخر.",
+        "Enter each late student's name.",
+      ]);
+  }
   if (v.kind === "cases" && v.from && v.to && v.from > v.to)
     errors.push([
       "تاريخ البداية يجب أن يسبق تاريخ النهاية.",
@@ -338,7 +443,8 @@ export function validateForm(v) {
   if (
     v.kind !== "case" &&
     !groups[v.kind].some((g) => (v[g.key] || []).some(isRowFilled)) &&
-    !v.notes?.trim()
+    !v.notes?.trim() &&
+    !v.decisions?.trim()
   )
     errors.push(["أضف بيانات النموذج.", "Enter form details."]);
   for (const g of groups[v.kind])
@@ -397,9 +503,17 @@ export function validateStore(value) {
         throw Error("Duplicate rows");
       for (const r of v[g.key]) {
         if (!r || typeof r.id !== "string") throw Error("Invalid row");
-        for (const f of g.fields)
+        for (const f of g.fields) {
+          if (
+            v.kind === "daily" &&
+            g.key === "attendance" &&
+            ["lateCount", "lateNames"].includes(f.key) &&
+            r[f.key] === undefined
+          )
+            r[f.key] = "";
           if (typeof r[f.key] !== "string" && typeof r[f.key] !== "number")
             throw Error("Invalid field");
+        }
       }
     }
     for (const [key, val] of Object.entries(v))

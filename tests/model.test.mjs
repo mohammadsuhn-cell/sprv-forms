@@ -128,3 +128,86 @@ test("shared school headers apply to restored drafts and exports without changin
   assert.equal(exported.year, schoolIdentity.year);
   assert(JSON.stringify(exported).includes("تفاصيل محفوظة"));
 });
+
+test("daily brief retains attendance, optional late names, cover, and facilities", () => {
+  const v = newForm("daily", { supervisor: "مشرف" });
+  Object.assign(v.attendance[0], {
+    className: "٧/١",
+    present: "20",
+    absent: "3",
+    lateCount: "2",
+    lateNames: "طالب أول\nطالب ثان",
+  });
+  Object.assign(v.covers[0], {
+    teacher: "معلم",
+    substitute: "بديل",
+    coverage: "حضر البديل",
+  });
+  Object.assign(v.facilities[0], {
+    location: "الفصل",
+    need: "تكييف",
+    details: "تعطل التكييف",
+  });
+  v.decisions = "إبلاغ الصيانة";
+  const r = report(v);
+  assert.equal(r.tables.length, 3);
+  assert.equal(r.tables[0].columns.length, 4);
+  assert.equal(r.tables[0].rows[0][3], "٢");
+  assert(
+    r.sections.some(
+      (s) =>
+        s.title === "أسماء المتأخرين صباحًا" &&
+        s.lines[0][1].includes("طالب ثان"),
+    ),
+  );
+  assert(r.sections.some((s) => s.title === "الإجراءات والمتابعة"));
+  assert.deepEqual(validateForm(v), []);
+  v.attendance[0].lateCount = "-1";
+  assert(validateForm(v).length);
+});
+test("legacy daily backups gain blank lateness fields without losing zero counts", () => {
+  const store = emptyStore(),
+    v = newForm("daily");
+  v.attendance[0].present = "0";
+  delete v.attendance[0].lateCount;
+  delete v.attendance[0].lateNames;
+  store.saved = [v];
+  const restored = validateStore(JSON.parse(JSON.stringify(store))).saved[0];
+  assert.equal(restored.attendance[0].present, "0");
+  assert.equal(restored.attendance[0].lateCount, "");
+  assert.equal(restored.attendance[0].lateNames, "");
+});
+
+test("late students require matching grade/class and names, count named students, and survive backup", async () => {
+  const { classesForGrade } = await import("../src/model.js");
+  const v = newForm("late", { supervisor: "مشرف" });
+  v.grade = "الصف السابع";
+  v.className = "٧/٢";
+  v.students[0].student = "طالب أول";
+  v.students.push({
+    ...newRow(groups.late[0]),
+    student: "طالب ثان",
+    arrival: "07:45",
+    reason: "تأخر وسيلة النقل",
+  });
+  v.students.push(newRow(groups.late[0]));
+  assert.deepEqual(validateForm(v), []);
+  assert.equal(classesForGrade(v.grade).length, 6);
+  assert.deepEqual(classesForGrade("غير معروف"), []);
+  const r = report(v);
+  assert(
+    r.meta.some(([key, value]) => key === "عدد المتأخرين" && value === "٢"),
+  );
+  assert.equal(r.tables[0].rows.length, 2);
+  assert.equal(r.tables[0].columns.length, 3);
+  const store = emptyStore();
+  store.saved = [v];
+  store.drafts.late = v;
+  assert.deepEqual(validateStore(JSON.parse(JSON.stringify(store))), store);
+  v.grade = "الصف الثامن";
+  assert(validateForm(v).length);
+  v.className = "٨/١";
+  assert.deepEqual(validateForm(v), []);
+  v.students[2].arrival = "08:00";
+  assert(validateForm(v).length);
+});

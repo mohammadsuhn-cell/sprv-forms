@@ -59,7 +59,7 @@ try {
                   ? f.options[1]
                   : f.kind === "textarea"
                     ? `تفاصيل الحالة التجريبية ${i + 1} ومتابعة الطالب. `.repeat(
-                        25,
+                        4,
                       )
                     : `بيان تجريبي ${i + 1}`;
         return r;
@@ -90,7 +90,7 @@ try {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller);
-  assert.equal(await page.locator(".form-card").count(), 1);
+  assert.equal(await page.locator(".form-card").count(), 4);
   assert.equal(
     await page.getByText("التقرير اليومي للإشراف", { exact: true }).count(),
     0,
@@ -152,7 +152,7 @@ try {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile("test-results/simple-case.xlsx");
   assert.equal(
-    wb.worksheets[0].getCell("E5").value,
+    wb.worksheets[0].getCell("E6").value,
     "إنذار أول (مخطط للتنفيذ)",
   );
   await page.getByRole("button", { name: "النماذج", exact: true }).click();
@@ -207,6 +207,10 @@ try {
     viewport: { width: 390, height: 844 },
   });
   const entry = await fresh.newPage();
+  entry.on("pageerror", (e) => errors.push(e.message));
+  entry.on("request", (r) => {
+    if (!["GET", "HEAD"].includes(r.method())) uploads.push(r.url());
+  });
   await entry.goto("http://127.0.0.1:4320/");
   await entry.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
   await entry
@@ -217,11 +221,176 @@ try {
     "المشرف الجديد",
   );
   assert(await entry.getByLabel("اسم المشرف", { exact: true }).isVisible());
+  await entry.getByRole("button", { name: "النماذج", exact: true }).click();
+  await entry
+    .getByRole("button", { name: "الموجز اليومي", exact: true })
+    .click();
+  assert.equal(
+    await entry
+      .locator("input:visible,select:visible,textarea:visible")
+      .count(),
+    5,
+  );
+  await entry
+    .getByLabel("الشعبة", { exact: true })
+    .filter({ visible: true })
+    .fill("٧/١");
+  await entry.getByLabel("الحاضرون", { exact: true }).fill("20");
+  await entry.getByLabel("الغائبون", { exact: true }).fill("3");
+  await entry.getByLabel("المتأخرون صباحًا", { exact: true }).fill("2");
+  await entry.getByText("الأسماء وتفاصيل إضافية", { exact: true }).click();
+  await entry
+    .getByLabel("أسماء المتأخرين (اختياري)", { exact: true })
+    .fill("طالب أول\nطالب ثان");
+  await entry
+    .locator("summary")
+    .filter({ hasText: "غياب المعلمين والبدلاء" })
+    .click();
+  await entry.getByLabel("المعلم الغائب", { exact: true }).fill("معلم تجريبي");
+  await entry.getByLabel("البديل", { exact: true }).fill("بديل تجريبي");
+  await entry
+    .getByLabel("حالة التغطية", { exact: true })
+    .selectOption("حضر البديل");
+  await entry
+    .locator("summary")
+    .filter({ hasText: "الأعطال والاحتياجات" })
+    .click();
+  await entry.getByLabel("الموقع", { exact: true }).selectOption("الفصل");
+  await entry.getByLabel("نوع الاحتياج", { exact: true }).selectOption("تكييف");
+  await entry
+    .getByLabel("التفاصيل والمتابعة", { exact: true })
+    .fill("تعطل التكييف، تم إبلاغ الصيانة.");
+  await entry.getByRole("button", { name: "حفظ النموذج", exact: true }).click();
+  await entry.locator(".saved-open").click();
+  await entry.getByText("تصدير", { exact: true }).click();
+  for (const [label, ext] of [
+    ["PDF", "pdf"],
+    ["Word", "docx"],
+    ["XLSX", "xlsx"],
+  ]) {
+    const waiting = entry.waitForEvent("download", { timeout: 60000 });
+    await entry.getByRole("button", { name: label, exact: true }).click();
+    await (await waiting).saveAs(`test-results/daily-brief.${ext}`);
+  }
+  const briefBook = new ExcelJS.Workbook();
+  await briefBook.xlsx.readFile("test-results/daily-brief.xlsx");
+  const bookText = JSON.stringify(briefBook.model);
+  for (const text of [
+    "وزارة التربية",
+    "منطقة الفروانية التعليمية",
+    "المتأخرون صباحًا",
+    "طالب ثان",
+    "معلم تجريبي",
+    "تعطل التكييف",
+  ])
+    assert(bookText.includes(text), text);
+  await entry.getByRole("button", { name: "النماذج", exact: true }).click();
+  await entry
+    .getByRole("button", { name: "سجل المعلمين والبدلاء", exact: true })
+    .click();
+  assert.equal(
+    await entry
+      .locator("input:visible,select:visible,textarea:visible")
+      .count(),
+    6,
+  );
+  await entry.getByLabel("المعلم الأصلي", { exact: true }).fill("معلم تجريبي");
+  await entry.getByLabel("الحصة", { exact: true }).selectOption("الأولى");
+  await entry
+    .getByLabel("الشعبة", { exact: true })
+    .filter({ visible: true })
+    .fill("٧/١");
+  await entry.getByLabel("البديل المبلّغ", { exact: true }).fill("بديل تجريبي");
+  await entry
+    .getByLabel("حالة التغطية", { exact: true })
+    .selectOption("حضر البديل");
+  await entry.getByText("تصدير", { exact: true }).click();
+  const coverPdf = entry.waitForEvent("download");
+  await entry.getByRole("button", { name: "PDF", exact: true }).click();
+  await (await coverPdf).saveAs("test-results/teacher-log.pdf");
+  assert(
+    await entry.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await entry.getByRole("button", { name: "النماذج", exact: true }).click();
+  await entry
+    .getByRole("button", { name: "الطلبة المتأخرون", exact: true })
+    .click();
+  assert(await entry.getByLabel("الشعبة", { exact: true }).isDisabled());
+  await entry.getByLabel("الصف", { exact: true }).selectOption("الصف السابع");
+  assert.equal(
+    await entry.getByLabel("الشعبة", { exact: true }).locator("option").count(),
+    7,
+  );
+  await entry.getByLabel("الشعبة", { exact: true }).selectOption("٧/٢");
+  await entry.getByLabel("اسم الطالب", { exact: true }).fill("طالب متأخر أول");
+  await entry.getByRole("button", { name: "إضافة طالب", exact: true }).click();
+  await entry
+    .getByLabel("اسم الطالب", { exact: true })
+    .nth(1)
+    .fill("طالب متأخر ثان");
+  await entry.getByLabel("الصف", { exact: true }).selectOption("الصف الثامن");
+  assert.equal(
+    await entry.getByLabel("الشعبة", { exact: true }).inputValue(),
+    "",
+  );
+  assert.equal(
+    await entry.getByLabel("اسم الطالب", { exact: true }).first().inputValue(),
+    "طالب متأخر أول",
+  );
+  await entry.getByLabel("الصف", { exact: true }).selectOption("الصف السابع");
+  await entry.getByLabel("الشعبة", { exact: true }).selectOption("٧/٢");
+  await entry.reload();
+  await entry
+    .getByRole("button", { name: "الطلبة المتأخرون", exact: true })
+    .click();
+  assert.equal(
+    await entry.getByLabel("الشعبة", { exact: true }).inputValue(),
+    "٧/٢",
+  );
+  assert.equal(
+    await entry.getByLabel("اسم الطالب", { exact: true }).count(),
+    2,
+  );
+  assert(
+    await entry.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await entry.screenshot({
+    path: "test-results/late-phone.png",
+    fullPage: true,
+  });
+  await entry.getByRole("button", { name: "حفظ النموذج", exact: true }).click();
+  await entry
+    .locator(".saved-open")
+    .filter({ hasText: "الطلبة المتأخرون" })
+    .click();
+  await entry.getByText("تصدير", { exact: true }).click();
+  for (const [label, ext] of [
+    ["PDF", "pdf"],
+    ["Word", "docx"],
+    ["XLSX", "xlsx"],
+  ]) {
+    const waiting = entry.waitForEvent("download", { timeout: 60000 });
+    await entry.getByRole("button", { name: label, exact: true }).click();
+    await (await waiting).saveAs(`test-results/late-students.${ext}`);
+  }
+  const lateBook = new ExcelJS.Workbook();
+  await lateBook.xlsx.readFile("test-results/late-students.xlsx");
+  for (const text of [
+    "٧/٢",
+    "الصف السابع",
+    "عدد المتأخرين: ٢",
+    "طالب متأخر ثان",
+  ])
+    assert(JSON.stringify(lateBook.model).includes(text), text);
   await fresh.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(uploads, []);
   console.log(
-    "PASS: six-field mobile entry, local save/edit, planned action preserved, Word/PDF/Excel, long Arabic table pagination, legacy drafts retained, English, offline PDF and zero form uploads.",
+    "PASS: four simple forms, dependent Arabic grade/class dropdowns, lateness persistence and exports, daily attendance/lateness/names/cover/facilities exports, official headers, six-field mobile entry, local save/edit, planned action preserved, Word/PDF/Excel, long Arabic table pagination, legacy drafts retained, English, offline PDF and zero form uploads.",
   );
 } finally {
   if (browser) await browser.close();

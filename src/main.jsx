@@ -20,15 +20,20 @@ import {
   X,
   Copy,
   Share2,
+  Clock3,
 } from "lucide-react";
 import "@fontsource/noto-sans-arabic/400.css";
 import "@fontsource/noto-sans-arabic/600.css";
 import "./style.css";
 import {
   titles,
+  grades,
+  classesForGrade,
+  arDigits,
   schoolIdentity,
   withSchoolIdentity,
   fields,
+  isRowFilled,
   caseRegister,
   groups,
   caseSections,
@@ -58,7 +63,7 @@ function read() {
   }
 }
 const initial = read();
-function Field({ field, value, onChange, lang }) {
+function Field({ field, value, onChange, lang, disabled = false }) {
   const id = React.useId();
   const t = (ar, en) => (lang === "en" ? en : ar);
   const common = {
@@ -67,6 +72,7 @@ function Field({ field, value, onChange, lang }) {
     value: value ?? "",
     onChange: (e) => onChange(e.target.value),
     autoComplete: "off",
+    disabled,
   };
   return (
     <label
@@ -319,6 +325,115 @@ function App() {
       onChange={(v) => change(key, v)}
     />
   );
+  const filledCount = (group) => {
+    const count = (form[group.key] || []).filter(isRowFilled).length;
+    return count ? <span className="count">{count}</span> : null;
+  };
+  const renderGroup = (group, primary = null) => (
+    <section className="group" key={group.key}>
+      <div className="section-heading">
+        {sectionTitle(group.ar, group.en)}
+        <span className="count">
+          {arDigits(
+            kind === "late"
+              ? form.students.filter((r) => r.student.trim()).length
+              : form[group.key].length,
+          )}
+        </span>
+      </div>
+      {form[group.key].map((row, index) => (
+        <div className="entry" key={row.id}>
+          <div className="entry-head">
+            <span>
+              {kind === "late" ? t("طالب", "Student") : t("سجل", "Entry")}{" "}
+              {arDigits(index + 1)}
+            </span>
+            <button
+              className="icon danger"
+              aria-label={t("حذف السجل", "Delete entry")}
+              onClick={() => {
+                if (
+                  Object.entries(row).some(([k, v]) => k !== "id" && v) &&
+                  !confirm(t("حذف هذا السجل؟", "Delete this entry?"))
+                )
+                  return;
+                change(
+                  group.key,
+                  form[group.key].filter((r) => r.id !== row.id),
+                );
+              }}
+            >
+              <Trash2 size={17} />
+            </button>
+          </div>
+          <div className="fields">
+            {(primary
+              ? primary.map((key) => group.fields.find((f) => f.key === key))
+              : group.fields
+            ).map((f) => (
+              <Field
+                lang={data.lang}
+                key={f.key}
+                field={f}
+                value={row[f.key]}
+                onChange={(v) =>
+                  change(
+                    group.key,
+                    form[group.key].map((r) =>
+                      r.id === row.id ? { ...r, [f.key]: v } : r,
+                    ),
+                  )
+                }
+              />
+            ))}
+          </div>
+          {primary && group.fields.some((f) => !primary.includes(f.key)) && (
+            <details className="row-options">
+              <summary>
+                {group.key === "attendance"
+                  ? t("الأسماء وتفاصيل إضافية", "Names & extra details")
+                  : t("تفاصيل إضافية", "Additional details")}
+              </summary>
+              <div className="fields">
+                {group.fields
+                  .filter((f) => !primary.includes(f.key))
+                  .map((f) => (
+                    <Field
+                      key={f.key}
+                      lang={data.lang}
+                      field={f}
+                      value={row[f.key]}
+                      onChange={(v) =>
+                        change(
+                          group.key,
+                          form[group.key].map((r) =>
+                            r.id === row.id ? { ...r, [f.key]: v } : r,
+                          ),
+                        )
+                      }
+                    />
+                  ))}
+              </div>
+            </details>
+          )}
+        </div>
+      ))}
+      <button
+        className="button add-row"
+        disabled={form[group.key].length >= 100}
+        onClick={() => change(group.key, [...form[group.key], newRow(group)])}
+      >
+        <Plus size={18} />
+        {group.key === "attendance"
+          ? t("إضافة شعبة", "Add class")
+          : group.key === "students"
+            ? t("إضافة طالب", "Add student")
+            : group.key === "covers"
+              ? t("إضافة حصة", "Add period")
+              : t("إضافة سجل", "Add entry")}
+      </button>
+    </section>
+  );
   return (
     <>
       <header className="topbar">
@@ -384,13 +499,29 @@ function App() {
               </div>
             )}
             <div className="form-cards">
-              <button className="form-card" onClick={() => openKind("case")}>
-                <Plus size={23} />
-                <div>
-                  <h2>{t("تسجيل حالة", "Record a case")}</h2>
-                </div>
-                {en ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-              </button>
+              {[
+                ["case", "تسجيل حالة", "Record a case", ClipboardList],
+                ["daily", "الموجز اليومي", "Daily brief", CalendarDays],
+                ["late", "الطلبة المتأخرون", "Late students", Clock3],
+                [
+                  "staffing",
+                  "سجل المعلمين والبدلاء",
+                  "Teachers & substitutes",
+                  Users,
+                ],
+              ].map(([key, ar, english, Icon]) => (
+                <button
+                  key={key}
+                  className="form-card"
+                  onClick={() => openKind(key)}
+                >
+                  <Icon size={23} />
+                  <div>
+                    <h2>{t(ar, english)}</h2>
+                  </div>
+                  {en ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                </button>
+              ))}
             </div>
             {data.saved.length > 0 && (
               <section className="recent">
@@ -448,7 +579,6 @@ function App() {
                   <span>{schoolIdentity.year}</span>
                 </div>
                 {field("supervisor", "اسم المشرف", "Supervisor")}
-                {kind !== "case" && field("date", "التاريخ", "Date", "date")}
                 {kind === "cases" && (
                   <>
                     {field("from", "من تاريخ", "From", "date")}
@@ -530,82 +660,115 @@ function App() {
                 </details>
               </>
             ) : (
-              groups[kind].map((group) => (
-                <section className="panel group" key={group.key}>
-                  <div className="section-heading">
-                    {sectionTitle(group.ar, group.en)}
-                    <span className="count">{form[group.key].length}</span>
-                  </div>
-                  {form[group.key].map((row, index) => (
-                    <div className="entry" key={row.id}>
-                      <div className="entry-head">
-                        <span>
-                          {t("سجل", "Entry")} {index + 1}
-                        </span>
-                        <button
-                          className="icon danger"
-                          aria-label={t("حذف السجل", "Delete entry")}
-                          onClick={() => {
-                            if (
-                              Object.entries(row).some(
-                                ([k, v]) => k !== "id" && v,
-                              ) &&
-                              !confirm(
-                                t("حذف هذا السجل؟", "Delete this entry?"),
-                              )
-                            )
-                              return;
-                            change(
-                              group.key,
-                              form[group.key].filter((r) => r.id !== row.id),
-                            );
+              <>
+                <section className="panel">
+                  <div className="fields">
+                    {field("date", "التاريخ", "Date", "date")}
+                    {kind === "late" && (
+                      <>
+                        <Field
+                          lang={data.lang}
+                          field={{
+                            key: "grade",
+                            ar: "الصف",
+                            en: "Grade",
+                            kind: "select",
+                            options: grades,
                           }}
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </div>
-                      <div className="fields">
-                        {group.fields.map((f) => (
-                          <Field
-                            lang={data.lang}
-                            key={f.key}
-                            field={f}
-                            value={row[f.key]}
-                            onChange={(v) =>
-                              change(
-                                group.key,
-                                form[group.key].map((r) =>
-                                  r.id === row.id ? { ...r, [f.key]: v } : r,
-                                ),
-                              )
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    className="button add-row"
-                    disabled={form[group.key].length >= 100}
-                    onClick={() =>
-                      change(group.key, [...form[group.key], newRow(group)])
-                    }
-                  >
-                    <Plus size={18} />
-                    {t("إضافة سجل", "Add entry")}
-                  </button>
+                          value={form.grade}
+                          onChange={(grade) =>
+                            setDraft({ ...form, grade, className: "" })
+                          }
+                        />
+                        <Field
+                          lang={data.lang}
+                          field={{
+                            key: "className",
+                            ar: "الشعبة",
+                            en: "Class",
+                            kind: "select",
+                            options: classesForGrade(form.grade),
+                          }}
+                          value={form.className}
+                          disabled={!form.grade}
+                          onChange={(value) => change("className", value)}
+                        />
+                      </>
+                    )}
+                  </div>
                 </section>
-              ))
-            )}
-            {kind !== "case" && (
-              <section className="panel">
-                {field(
-                  "notes",
-                  "ملاحظات المشرف",
-                  "Supervisor notes",
-                  "textarea",
+                {kind === "late" ? (
+                  <section className="panel">
+                    {renderGroup(groups.late[0], ["student"])}
+                  </section>
+                ) : kind === "daily" ? (
+                  <>
+                    <section className="panel">
+                      {renderGroup(groups.daily[0], [
+                        "className",
+                        "present",
+                        "absent",
+                        "lateCount",
+                      ])}
+                    </section>
+                    {groups.daily.slice(1).map((group) => (
+                      <details key={group.key} className="panel optional">
+                        <summary>
+                          {t(group.ar, group.en)}
+                          {filledCount(group)}
+                        </summary>
+                        {renderGroup(group)}
+                      </details>
+                    ))}
+                  </>
+                ) : kind === "staffing" ? (
+                  <>
+                    <section className="panel">
+                      {renderGroup(groups.staffing[1], [
+                        "teacher",
+                        "period",
+                        "className",
+                        "substitute",
+                        "coverage",
+                      ])}
+                    </section>
+                    <details className="panel optional">
+                      <summary>
+                        {t(
+                          "تفاصيل الغياب والتأخر",
+                          "Absence & late-arrival details",
+                        )}
+                        {filledCount(groups.staffing[0])}
+                      </summary>
+                      {renderGroup(groups.staffing[0])}
+                    </details>
+                  </>
+                ) : (
+                  groups[kind].map((group) => (
+                    <section className="panel" key={group.key}>
+                      {renderGroup(group)}
+                    </section>
+                  ))
                 )}
-              </section>
+                <details className="panel optional">
+                  <summary>{t("ملاحظات وإجراءات", "Notes & actions")}</summary>
+                  <div className="fields">
+                    {field(
+                      "notes",
+                      kind === "daily" ? "ملاحظات اليوم" : "ملاحظات المشرف",
+                      "Notes",
+                      "textarea",
+                    )}
+                    {kind === "daily" &&
+                      field(
+                        "decisions",
+                        "الإجراءات والمتابعة",
+                        "Actions & follow-up",
+                        "textarea",
+                      )}
+                  </div>
+                </details>
+              </>
             )}
             {readyFile && (
               <div className="file-ready">
@@ -624,7 +787,9 @@ function App() {
                 onClick={save}
               >
                 <Check size={18} />
-                {t("حفظ الحالة", "Save record")}
+                {kind === "case"
+                  ? t("حفظ الحالة", "Save record")
+                  : t("حفظ النموذج", "Save form")}
               </button>
               <details className="export-menu">
                 <summary className="button">{t("تصدير", "Export")}</summary>
@@ -840,11 +1005,8 @@ function App() {
               >
                 {t("قوالب Word", "Word templates")}
               </a>
-              <button className="button" onClick={() => openKind("staffing")}>
-                {t("المعلمون والبدلاء", "Staff & cover")}
-              </button>
               {Object.entries(data.drafts)
-                .filter(([k]) => ["daily", "cases"].includes(k))
+                .filter(([k]) => k === "cases")
                 .map(([k]) => (
                   <button
                     className="button"

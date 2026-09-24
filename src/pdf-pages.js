@@ -66,14 +66,28 @@ export async function renderPages(r) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, width, height);
     pages.push(canvas);
-    draw(r.school || "", width - margin, 32, 20, true);
-    if (r.year) draw("العام الدراسي: " + r.year, width - margin, 76, 15);
-    draw(r.title, width - margin, 110, 28, true);
+    const half = contentWidth / 2,
+      top = 30;
+    draw(r.ministry, width - margin, top, 19, true);
+    draw(r.district, width - margin, top + 34, 16);
+    const schoolLines = wrap(r.school || "", half - 24, 18, true);
+    schoolLines.forEach((line, i) =>
+      draw(line, width / 2 - 16, top + i * 30, 18, true),
+    );
+    const schoolBottom = top + schoolLines.length * 30;
+    if (r.year)
+      draw("العام الدراسي: " + r.year, width / 2 - 16, schoolBottom + 5, 14);
+    const titleTop = Math.max(top + 80, schoolBottom + 48);
+    font(26, true);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#303530";
+    ctx.fillText(r.title, width / 2, titleTop + 36);
+    const ruleY = titleTop + 56;
     ctx.strokeStyle = "#6b706a";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(margin, 166);
-    ctx.lineTo(width - margin, 166);
+    ctx.moveTo(margin, ruleY);
+    ctx.lineTo(width - margin, ruleY);
     ctx.stroke();
     draw(
       String(pages.length).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]),
@@ -81,7 +95,7 @@ export async function renderPages(r) {
       height - 40,
       11,
     );
-    y = 184;
+    y = ruleY + 22;
   };
   const ensure = (h) => {
     if (y + h > bottom) newPage();
