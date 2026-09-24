@@ -33,11 +33,12 @@ export async function wordBlob(form) {
     PageNumber,
   } = await import("docx");
   const r = report(form);
-  const p = (text, bold = false, size = 24) =>
+  const p = (text, bold = false, size = 28) =>
     new Paragraph({
       bidirectional: true,
       alignment: AlignmentType.START,
-      spacing: { after: 110 },
+      spacing: { before: bold ? 180 : 0, after: 160, line: 360 },
+      keepNext: bold,
       children: String(text || "")
         .split("\n")
         .flatMap((s, i) => [
@@ -67,7 +68,7 @@ export async function wordBlob(form) {
             (c) =>
               new TableCell({
                 shading: { fill: "E9EEF2" },
-                children: [p(c, true, 22)],
+                children: [p(c, true, 24)],
               }),
           ),
         }),
@@ -75,20 +76,20 @@ export async function wordBlob(form) {
           (row) =>
             new TableRow({
               children: row.map(
-                (c) => new TableCell({ children: [p(c, false, 22)] }),
+                (c) => new TableCell({ children: [p(c, false, 24)] }),
               ),
             }),
         ),
       ],
     });
   const children = [
-    p(r.school, true, 30),
-    p(`العام الدراسي: ${r.year}`, false, 22),
-    p(r.title, true, 36),
+    p(r.school, true, 34),
+    p(`العام الدراسي: ${r.year}`, false, 26),
+    p(r.title, true, 44),
     ...r.meta.map(([k, v]) => p(`${k}: ${v}`)),
-    ...r.tables.flatMap((t) => [p(t.title, true, 26), table(t)]),
+    ...r.tables.flatMap((t) => [p(t.title, true, 32), table(t)]),
     ...r.sections.flatMap((s) => [
-      p(s.title, true, 26),
+      p(s.title, true, 32),
       ...s.lines.map(([k, v]) => p(k ? `${k}: ${v}` : v)),
     ]),
     p(`اسم المشرف: ${r.supervisor}`),
@@ -102,8 +103,8 @@ export async function wordBlob(form) {
         document: {
           run: {
             font: { ascii: "Arial", hAnsi: "Arial", cs: "Arial" },
-            size: 24,
-            sizeComplexScript: 24,
+            size: 28,
+            sizeComplexScript: 28,
           },
           paragraph: { bidirectional: true },
         },

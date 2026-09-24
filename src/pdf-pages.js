@@ -13,18 +13,18 @@ export async function renderPages(r) {
     contentWidth = width - margin * 2;
   const pages = [];
   let canvas, ctx, y;
-  const font = (size = 14, bold = false) => {
+  const font = (size = 18, bold = false) => {
     ctx.font = `${bold ? 600 : 400} ${size}px "Noto Sans Arabic", Arial, sans-serif`;
     ctx.direction = "rtl";
     ctx.textAlign = "right";
     ctx.textBaseline = "alphabetic";
   };
-  const draw = (value, x, top, size = 14, bold = false, color = "#303530") => {
+  const draw = (value, x, top, size = 18, bold = false, color = "#303530") => {
     font(size, bold);
     ctx.fillStyle = color;
     ctx.fillText(String(value ?? ""), x, top + size * 1.45);
   };
-  const wrap = (value, maxWidth, size = 14, bold = false) => {
+  const wrap = (value, maxWidth, size = 18, bold = false) => {
     font(size, bold);
     const lines = [];
     for (const para of String(value ?? "").split("\n")) {
@@ -66,14 +66,14 @@ export async function renderPages(r) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, width, height);
     pages.push(canvas);
-    draw(r.school || "", width - margin, 36, 17, true);
-    if (r.year) draw("العام الدراسي: " + r.year, width - margin, 70, 12);
-    draw(r.title, width - margin, 100, 23, true);
+    draw(r.school || "", width - margin, 32, 20, true);
+    if (r.year) draw("العام الدراسي: " + r.year, width - margin, 76, 15);
+    draw(r.title, width - margin, 110, 28, true);
     ctx.strokeStyle = "#6b706a";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(margin, 148);
-    ctx.lineTo(width - margin, 148);
+    ctx.moveTo(margin, 166);
+    ctx.lineTo(width - margin, 166);
     ctx.stroke();
     draw(
       String(pages.length).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]),
@@ -81,18 +81,18 @@ export async function renderPages(r) {
       height - 40,
       11,
     );
-    y = 164;
+    y = 184;
   };
   const ensure = (h) => {
     if (y + h > bottom) newPage();
   };
-  const paragraph = (text, size = 14, bold = false) => {
+  const paragraph = (text, size = 18, bold = false) => {
     for (const line of wrap(text, contentWidth, size, bold)) {
-      ensure(30);
+      ensure(36);
       draw(line, width - margin, y, size, bold);
-      y += 30;
+      y += 36;
     }
-    y += 5;
+    y += 7;
   };
   newPage();
   for (const [key, value] of r.meta) paragraph(`${key}: ${value}`);
@@ -102,9 +102,9 @@ export async function renderPages(r) {
         ? [10, 17, 7, 14, 20, 14, 10, 8]
         : Array(table.columns.length).fill(100 / table.columns.length);
     const widths = weights.map((w) => (contentWidth * w) / 100),
-      lineHeight = 25;
+      lineHeight = 29;
     const row = (cells, header = false, repeatHeader) => {
-      const lines = cells.map((v, i) => wrap(v, widths[i] - 16, 12, header));
+      const lines = cells.map((v, i) => wrap(v, widths[i] - 16, 14, header));
       const total = Math.max(...lines.map((l) => l.length));
       let offset = 0;
       while (offset < total) {
@@ -130,7 +130,7 @@ export async function renderPages(r) {
                 lines[i][offset + n],
                 right - 8,
                 y + 7 + n * lineHeight,
-                12,
+                14,
                 header,
               );
           right -= widths[i];
@@ -139,21 +139,21 @@ export async function renderPages(r) {
         offset += take;
       }
     };
-    ensure(115);
-    paragraph(table.title, 16, true);
+    ensure(140);
+    paragraph(table.title, 20, true);
     const header = () => row(table.columns, true);
     header();
     for (const cells of table.rows) row(cells, false, header);
     y += 18;
   }
   for (const section of r.sections) {
-    ensure(90);
-    paragraph(section.title, 16, true);
+    ensure(100);
+    paragraph(section.title, 20, true);
     for (const [key, value] of section.lines)
       paragraph(key ? `${key}: ${value}` : value);
-    y += 10;
+    y += 14;
   }
-  ensure(85);
+  ensure(100);
   paragraph("اسم المشرف: " + r.supervisor);
   paragraph("التوقيع: ____________________");
   return pages;
