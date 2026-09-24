@@ -1,6 +1,6 @@
 # نماذج الإشراف المدرسي
 
-Arabic phone case entry, separate from the local sprv register. The home screen offers case entry and saved records. School details carry over; six fields are visible by default. Additional details are optional. Saved records support due follow-ups and a six-column Excel export. Staffing and existing legacy daily/register drafts remain accessible in Settings; existing saved forms and backups keep the v1 storage format.
+Arabic phone case entry, separate from the local sprv register. The home screen offers case entry and saved records. School name and year are fixed centrally in `schoolIdentity` for form headers and exports; each supervisor supplies their own name. Existing saved case contents remain intact. six fields are visible by default. Additional details are optional. Saved records support due follow-ups and a six-column Excel export. Staffing and existing legacy daily/register drafts remain accessible in Settings; existing saved forms and backups keep the v1 storage format.
 
 No API, accounts, analytics, or uploaded form data. Drafts and records use this browser's localStorage. JSON backup/restore is available in Settings. Clearing browser data removes local records.
 

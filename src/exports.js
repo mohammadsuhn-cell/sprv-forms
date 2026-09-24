@@ -1,4 +1,4 @@
-import { report } from "./model.js";
+import { report, withSchoolIdentity } from "./model.js";
 export const fileName = (form, extension) =>
   `${report(form).title}-${form.date}.${extension}`.replace(
     /[\\/:*?"<>|]/g,
@@ -174,6 +174,7 @@ export async function pdfBlob(form) {
 }
 
 export async function excelBlob(form) {
+  form = withSchoolIdentity(form);
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
   const s = wb.addWorksheet("الحالات", {

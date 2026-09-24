@@ -209,7 +209,6 @@ try {
   const entry = await fresh.newPage();
   await entry.goto("http://127.0.0.1:4320/");
   await entry.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
-  await entry.getByLabel("اسم المدرسة", { exact: true }).fill("مدرسة جديدة");
   await entry
     .getByLabel("اسم المشرف", { exact: true })
     .pressSequentially("المشرف الجديد");

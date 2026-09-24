@@ -804,3 +804,13 @@ h2 {
     width: 100%;
   }
 }
+.school-identity {
+  font-size: 15px;
+  line-height: 1.9;
+  margin-bottom: 16px;
+}
+.school-identity span {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+}

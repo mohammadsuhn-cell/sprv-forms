@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newForm,
+  schoolIdentity,
   report,
   validateForm,
   validateStore,
@@ -19,7 +20,9 @@ test("new forms retain profile, start blank, and isolate copies", () => {
     const a = newForm(kind, profile),
       b = newForm(kind, profile);
     assert.notEqual(a.id, b.id);
-    assert.equal(a.school, profile.school);
+    assert.equal(a.school, schoolIdentity.school);
+    assert.equal(a.year, schoolIdentity.year);
+    assert.equal(a.supervisor, profile.supervisor);
     assert.equal(a.student || "", "");
     if (kind !== "case") {
       assert.notEqual(
@@ -101,4 +104,27 @@ test("simple register preserves planned actions and includes only individual cas
     validateStore(JSON.parse(JSON.stringify(store))).drafts.daily.kind,
     "daily",
   );
+});
+
+test("shared school headers apply to restored drafts and exports without changing saved case contents", () => {
+  const v = emptyStore();
+  v.profile = { school: "اسم قديم", year: "2025", supervisor: "مشرف آخر" };
+  const old = {
+    ...newForm("case", v.profile),
+    school: "اسم قديم",
+    year: "2025",
+    student: "طالب تجريبي",
+    description: "تفاصيل محفوظة",
+  };
+  v.drafts.case = old;
+  v.saved = [{ ...old }];
+  const loaded = validateStore(v);
+  assert.equal(loaded.profile.school, schoolIdentity.school);
+  assert.equal(loaded.drafts.case.year, schoolIdentity.year);
+  assert.equal(loaded.profile.supervisor, "مشرف آخر");
+  assert.deepEqual(loaded.saved[0], old);
+  const exported = report(old);
+  assert.equal(exported.school, schoolIdentity.school);
+  assert.equal(exported.year, schoolIdentity.year);
+  assert(JSON.stringify(exported).includes("تفاصيل محفوظة"));
 });

@@ -26,6 +26,8 @@ import "@fontsource/noto-sans-arabic/600.css";
 import "./style.css";
 import {
   titles,
+  schoolIdentity,
+  withSchoolIdentity,
   fields,
   caseRegister,
   groups,
@@ -157,6 +159,7 @@ function App() {
     messageTimer.current = setTimeout(() => setMessage(""), 4500);
   }
   function setDraft(value) {
+    value = withSchoolIdentity(value);
     setData((d) => ({ ...d, drafts: { ...d.drafts, [value.kind]: value } }));
     setReadyFile(null);
   }
@@ -367,22 +370,17 @@ function App() {
                 <span className="count">{data.saved.length}</span>
               </button>
             </div>
-            {!data.profile.school && (
+            {!data.profile.supervisor && (
               <button className="setup" onClick={() => setPage("settings")}>
                 <Settings size={20} />
-                <span>
-                  {t(
-                    "إعداد بيانات المدرسة والمشرف",
-                    "Set school and supervisor details",
-                  )}
-                </span>
+                <span>{t("إعداد اسم المشرف", "Set supervisor name")}</span>
                 {en ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
               </button>
             )}
             {data.profile.school && (
               <div className="school-line">
                 <strong>{data.profile.school}</strong>
-                <span>{data.profile.supervisor}</span>
+                <span>{schoolIdentity.year}</span>
               </div>
             )}
             <div className="form-cards">
@@ -441,13 +439,15 @@ function App() {
             )}
             <OptionalPanel
               key={form.id}
-              initialOpen={!form.school || !form.supervisor}
+              initialOpen={!form.supervisor}
               title={form.school || t("بيانات المدرسة", "School details")}
             >
               <div className="fields">
-                {field("school", "اسم المدرسة", "School")}
+                <div className="school-identity wide">
+                  {schoolIdentity.school}
+                  <span>{schoolIdentity.year}</span>
+                </div>
                 {field("supervisor", "اسم المشرف", "Supervisor")}
-                {field("year", "العام الدراسي", "School year")}
                 {kind !== "case" && field("date", "التاريخ", "Date", "date")}
                 {kind === "cases" && (
                   <>
@@ -740,26 +740,28 @@ function App() {
           <>
             <h1>{t("الإعدادات", "Settings")}</h1>
             <section className="panel">
-              {sectionTitle("بيانات النماذج الجديدة", "New form details")}
+              {sectionTitle("بيانات النماذج", "Form details")}
+              <div className="school-identity">
+                {schoolIdentity.school}
+                <span>{schoolIdentity.year}</span>
+              </div>
               <div className="fields">
-                {[
-                  ["school", "اسم المدرسة", "School"],
-                  ["supervisor", "اسم المشرف", "Supervisor"],
-                  ["year", "العام الدراسي", "School year"],
-                ].map(([key, ar, english]) => (
-                  <Field
-                    lang={data.lang}
-                    key={key}
-                    field={{ key, ar, en: english }}
-                    value={data.profile[key]}
-                    onChange={(v) =>
-                      setData((d) => ({
-                        ...d,
-                        profile: { ...d.profile, [key]: v },
-                      }))
-                    }
-                  />
-                ))}
+                {[["supervisor", "اسم المشرف", "Supervisor"]].map(
+                  ([key, ar, english]) => (
+                    <Field
+                      lang={data.lang}
+                      key={key}
+                      field={{ key, ar, en: english }}
+                      value={data.profile[key]}
+                      onChange={(v) =>
+                        setData((d) => ({
+                          ...d,
+                          profile: { ...d.profile, [key]: v },
+                        }))
+                      }
+                    />
+                  ),
+                )}
               </div>
               <span className="small-status">
                 {t(

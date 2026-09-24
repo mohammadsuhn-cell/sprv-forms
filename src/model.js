@@ -1,3 +1,8 @@
+export const schoolIdentity = Object.freeze({
+  school: "مدرسة عمار بن ياسر المتوسطة للبنين",
+  year: "٢٠٢٦/٢٠٢٧",
+});
+export const withSchoolIdentity = (value) => ({ ...value, ...schoolIdentity });
 export const titles = {
   cases: ["سجل الحالات والمتابعة", "Case register"],
   case: ["تفاصيل الحالة", "Case details"],
@@ -237,8 +242,8 @@ export function newForm(kind, profile = {}) {
     id: uid(),
     kind,
     date: today(),
-    school: profile.school || "",
-    year: profile.year || "",
+    school: schoolIdentity.school,
+    year: schoolIdentity.year,
     supervisor: profile.supervisor || "",
     notes: "",
     createdAt: new Date().toISOString(),
@@ -261,6 +266,7 @@ export const arDigits = (s) =>
 export const dateLabel = (s) =>
   s ? arDigits(s.split("-").reverse().join("/")) : "";
 export function report(form) {
+  form = withSchoolIdentity(form);
   const sections = [],
     tables = [];
   const meta = [["التاريخ", dateLabel(form.date)]];
@@ -352,7 +358,7 @@ export function validateForm(v) {
 export const storageKey = "sprv-phone-forms-v1";
 export const emptyStore = () => ({
   version: 1,
-  profile: { school: "", year: "", supervisor: "" },
+  profile: { ...schoolIdentity, supervisor: "" },
   drafts: {},
   saved: [],
   lang: "ar",
@@ -402,7 +408,14 @@ export function validateStore(value) {
   }
   if (new Set(value.saved.map((v) => v.id)).size !== value.saved.length)
     throw Error("Duplicate records");
-  return { ...value, lang: value.lang === "en" ? "en" : "ar" };
+  return {
+    ...value,
+    profile: withSchoolIdentity(value.profile),
+    drafts: Object.fromEntries(
+      Object.entries(value.drafts).map(([k, v]) => [k, withSchoolIdentity(v)]),
+    ),
+    lang: value.lang === "en" ? "en" : "ar",
+  };
 }
 
 // Aggregate saved individual cases without changing their IDs or historical school details.
