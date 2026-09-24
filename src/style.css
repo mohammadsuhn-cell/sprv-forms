@@ -1041,3 +1041,55 @@ h2 {
   bottom: 285px;
   pointer-events: none;
 }
+
+.absence-class-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 18px;
+}
+.absence-class-tabs .button {
+  min-height: 46px;
+  justify-content: center;
+}
+.absence-class-tabs .active {
+  border-color: #484d48;
+  background: #edf0ec;
+}
+.absence-counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 20px 0;
+  border-block: 1px solid #d9ddd7;
+  padding: 12px 0;
+}
+.absence-counts span {
+  display: grid;
+  text-align: center;
+  font-size: 15px;
+}
+.absence-counts strong {
+  font-size: 24px;
+}
+.absence-adjustments {
+  margin-top: 18px;
+}
+.absence-adjustments summary {
+  cursor: pointer;
+  padding-block: 10px;
+}
+.absence-adjustments .field {
+  margin-block: 12px;
+}
+.absence-confirm {
+  width: 100%;
+  justify-content: center;
+}
+.absence-complete {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 16px;
+  background: #edf0ec;
+  border: 1px solid #d9ddd7;
+}

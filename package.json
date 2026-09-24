@@ -13,7 +13,8 @@
     "check:layout": "node scripts/check-export-layout.mjs",
     "check:interactions": "node scripts/check-interactions.mjs",
     "check:roster": "node scripts/check-roster.mjs",
-    "check:file-flow": "node scripts/check-file-flow.mjs"
+    "check:file-flow": "node scripts/check-file-flow.mjs",
+    "check:absence": "node scripts/check-absence.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-arabic": "5.3.0",

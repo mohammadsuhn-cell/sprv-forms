@@ -107,7 +107,7 @@ try {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller);
-  assert.equal(await page.locator(".form-card").count(), 4);
+  assert.equal(await page.locator(".form-card").count(), 5);
   assert.equal(
     await page.getByText("التقرير اليومي للإشراف", { exact: true }).count(),
     0,

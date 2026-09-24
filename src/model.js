@@ -1,3 +1,8 @@
+import {
+  initializeAbsence,
+  validateAbsence,
+  absenceReport,
+} from "./absence.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 export const letterhead = Object.freeze({
   ministry: "وزارة التربية",
@@ -14,6 +19,7 @@ export const titles = {
   staffing: ["سجل المعلمين والبدلاء", "Teachers & substitutes"],
   daily: ["الموجز اليومي", "Daily brief"],
   late: ["الطلبة المتأخرون", "Late students"],
+  absence: ["إحصائية الغياب اليومي", "Daily absence sheet"],
 };
 export const grades = [
   "الصف السادس",
@@ -129,6 +135,30 @@ export const groups = {
     },
   ],
   case: [],
+  absence: [
+    {
+      key: "students",
+      ar: "الغائبون",
+      en: "Absent students",
+      fields: [fields.student, fields.className],
+    },
+    {
+      key: "classes",
+      ar: "الشعب",
+      en: "Classes",
+      fields: [
+        fields.className,
+        f("total", "المقيدون", "Enrolled", "number"),
+        f("confirmed", "تم التأكيد", "Confirmed"),
+      ],
+    },
+    {
+      key: "roll",
+      ar: "قائمة الطلبة",
+      en: "Class roll",
+      fields: [fields.student, fields.className],
+    },
+  ],
   late: [
     {
       key: "students",
@@ -316,6 +346,8 @@ export function newForm(kind, profile = {}, roster = null) {
   }
   if (kind === "case")
     for (const s of caseSections) for (const f of s.fields) form[f.key] = "";
+  if (kind === "absence")
+    return initializeAbsence(form, roster, profile.grade, uid);
   for (const g of groups[kind]) form[g.key] = [newRow(g)];
   if (form.rosterMode === "yes") form.students = [];
   return form;
@@ -330,6 +362,20 @@ export const dateLabel = (s) =>
   s ? arDigits(s.split("-").reverse().join("/")) : "";
 export function report(form) {
   form = withSchoolIdentity(form);
+  if (form.kind === "absence")
+    return {
+      ...letterhead,
+      title: titles.absence[0],
+      school: form.school,
+      year: form.year,
+      supervisor: form.supervisor,
+      landscape: true,
+      layout: "absence",
+      absence: absenceReport(form),
+      sections: [],
+      tables: [],
+      meta: [],
+    };
   const sections = [],
     tables = [];
   const meta = [["التاريخ", dateLabel(form.date)]];
@@ -442,6 +488,11 @@ export function validateForm(v) {
   if (!v.supervisor?.trim())
     errors.push(["أدخل اسم المشرف.", "Enter the supervisor name."]);
   if (!v.date) errors.push(["حدد التاريخ.", "Choose a date."]);
+  if (v.kind === "absence") {
+    if (!grades.includes(v.grade))
+      errors.push(["اختر الصف.", "Choose a grade."]);
+    return [...errors, ...validateAbsence(v, classesForGrade(v.grade))];
+  }
   if (v.kind === "case" && !v.student?.trim())
     errors.push(["أدخل اسم الطالب.", "Enter the student name."]);
   if (v.kind === "late") {
@@ -546,7 +597,13 @@ export function validateStore(value) {
     for (const key of ["school", "supervisor", "year"])
       if (typeof v[key] !== "string") throw Error("Invalid form");
     for (const g of groups[v.kind]) {
-      if (!Array.isArray(v[g.key]) || v[g.key].length > 500)
+      if (
+        !Array.isArray(v[g.key]) ||
+        v[g.key].length >
+          (v.kind === "absence" && ["roll", "students"].includes(g.key)
+            ? 3000
+            : 500)
+      )
         throw Error("Invalid rows");
       if (new Set(v[g.key].map((r) => r.id)).size !== v[g.key].length)
         throw Error("Duplicate rows");
@@ -656,5 +713,14 @@ export function withRoster(store, roster) {
       students: [],
     };
   }
+  const absence = drafts.absence;
+  if (
+    absence &&
+    !absence.savedAt &&
+    !store.saved.some((s) => s.id === absence.id) &&
+    !absence.roll.length &&
+    !absence.students.length
+  )
+    drafts.absence = initializeAbsence(absence, roster, grade, uid);
   return { ...store, profile, roster, drafts };
 }

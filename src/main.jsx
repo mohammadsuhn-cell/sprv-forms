@@ -52,6 +52,7 @@ import {
 import { download, fileName } from "./exports.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 import { StudentPicker, LateChecklist } from "./roster-ui.jsx";
+import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
 function read() {
   try {
@@ -660,6 +661,12 @@ function App() {
               {[
                 ["case", "تسجيل حالة", "Record a case", ClipboardList],
                 ["daily", "الموجز اليومي", "Daily brief", CalendarDays],
+                [
+                  "absence",
+                  "إحصائية الغياب اليومي",
+                  "Daily absence sheet",
+                  ClipboardList,
+                ],
                 ["late", "الطلبة المتأخرون", "Late students", Clock3],
                 [
                   "staffing",
@@ -738,7 +745,17 @@ function App() {
                 )}
               </div>
             </OptionalPanel>
-            {kind === "case" ? (
+            {kind === "absence" ? (
+              <AbsenceChecklist
+                key={form.id}
+                form={form}
+                roster={data.roster}
+                lang={data.lang}
+                onChange={setDraft}
+                onSettings={() => setPage("settings")}
+                Field={Field}
+              />
+            ) : kind === "case" ? (
               <>
                 <section className="panel">
                   <div className="fields">
@@ -973,7 +990,10 @@ function App() {
                 <details className="export-menu">
                   <summary className="button">{t("تصدير", "Export")}</summary>
                   <div>
-                    {["pdf", "word", "xlsx"].map((type) => (
+                    {(kind === "absence"
+                      ? ["pdf"]
+                      : ["pdf", "word", "xlsx"]
+                    ).map((type) => (
                       <button
                         key={type}
                         className="button"
@@ -1311,7 +1331,8 @@ function App() {
             <strong>{item.student || titles[item.kind][en ? 1 : 0]}</strong>
             <span>
               {dateLabel(item.date)} ·{" "}
-              {item.className || titles[item.kind][en ? 1 : 0]}
+              {(item.kind === "absence" ? item.grade : item.className) ||
+                titles[item.kind][en ? 1 : 0]}
               {item.due && (
                 <span>
                   {t("المتابعة: ", "Follow-up: ")}

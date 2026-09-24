@@ -1,3 +1,4 @@
+import { renderAbsencePages } from "./absence-pages.js";
 import { printStyle as colors, columnPercentages } from "./export-style.js";
 
 // Draw complete lines with native Arabic shaping; never assemble separate letters.
@@ -7,6 +8,7 @@ export async function renderPages(r) {
     document.fonts.load('600 18px "Noto Sans Arabic"'),
   ]);
   await document.fonts.ready;
+  if (r.layout === "absence") return renderAbsencePages(r);
   const width = r.landscape ? 1123 : 794,
     height = r.landscape ? 794 : 1123,
     margin = 44,
