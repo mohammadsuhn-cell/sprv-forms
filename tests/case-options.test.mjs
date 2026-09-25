@@ -12,6 +12,9 @@ import {
   composeCaseDescription,
   updateCaseChoice,
   actionText,
+  incidentDetails,
+  prepareCaseDraft,
+  caseDescription,
 } from "../src/case-options.js";
 
 test("descriptions use explicit choices, attribute reported information and drop unrelated details", () => {
@@ -21,7 +24,7 @@ test("descriptions use explicit choices, attribute reported information and drop
   form = updateCaseChoice(form, "incidentDetail", "ذكر تأخر وسيلة النقل");
   form = updateCaseChoice(form, "source", "إفادة منقولة");
   assert(form.description.startsWith("بحسب إفادة منقولة،"));
-  assert(form.description.includes("ذكر تأخر وسيلة النقل"));
+  assert(form.description.includes("ذكر أن وسيلة النقل تأخرت"));
   assert(!form.description.includes("أول مرة"));
   assert(!form.description.includes("الحصة: الأولى"));
   form = updateCaseChoice(form, "recurrence", "تكررت سابقًا");
@@ -86,4 +89,108 @@ test("pending actions use the new wording in reports and registers while retaini
   );
   for (const action of ["تعهد خطي", "فصل يوم", "فصل يومين", "فصل ثلاثة أيام"])
     assert(actions.includes(action));
+});
+
+test("every incident detail becomes a natural sentence without field labels", () => {
+  for (const [type, details] of Object.entries(incidentDetails)) {
+    const base = composeCaseDescription({ type });
+    for (const incidentDetail of details) {
+      const text = composeCaseDescription({ type, incidentDetail });
+      assert(text.length > 15);
+      assert.notEqual(
+        text,
+        base,
+        `${type}: ${incidentDetail} must be represented`,
+      );
+      assert(!/[:()[\]]/.test(text), text);
+    }
+  }
+  assert.equal(
+    composeCaseDescription({
+      type: "الخروج من الفصل",
+      incidentDetail: "خرج دون استئذان",
+      location: "الفصل",
+    }),
+    "غادر الطالب الفصل دون استئذان.",
+  );
+  assert.equal(
+    composeCaseDescription({
+      type: "عدم إحضار الأدوات",
+      incidentDetail: "الكتاب المدرسي",
+      period: "الثانية",
+    }),
+    "لم يحضر الطالب الكتاب المدرسي خلال الحصة الثانية.",
+  );
+});
+test("notes remain separate, persist across choices and appear once in the preview and exports", () => {
+  let form = updateCaseChoice(
+    newForm("case", { supervisor: "مشرف تجريبي" }),
+    "type",
+    "الخروج من الفصل",
+  );
+  form = updateCaseChoice(form, "incidentDetail", "خرج دون استئذان");
+  form = updateCaseChoice(
+    form,
+    "incidentNotes",
+    "ملاحظة إضافية كما كتبها المشرف",
+  );
+  form = updateCaseChoice(form, "period", "الثانية");
+  assert.equal(form.incidentNotes, "ملاحظة إضافية كما كتبها المشرف");
+  assert.equal(caseDescription(form), form.description);
+  const store = emptyStore();
+  store.drafts.case = form;
+  const restored = validateStore(JSON.parse(JSON.stringify(store))).drafts.case;
+  const prepared = prepareCaseDraft(restored);
+  const line = report(prepared)
+    .sections.flatMap((s) => s.lines)
+    .find(([key]) => key === "وصف الواقعة");
+  assert.equal(line[1], prepared.description);
+  assert.equal(line[1].split(form.incidentNotes).length - 1, 1);
+  assert(
+    !report(prepared)
+      .sections.flatMap((s) => s.lines)
+      .some(([key]) => key === "تفصيل الواقعة"),
+  );
+  assert.equal(
+    caseRegister([prepared]).rows[0].description,
+    prepared.description,
+  );
+  const notesOnly = updateCaseChoice(
+    newForm("case"),
+    "incidentNotes",
+    "واقعة موضحة بالنص فقط",
+  );
+  assert.equal(notesOnly.description, "واقعة موضحة بالنص فقط");
+});
+test("old generated drafts are rephrased while written descriptions and saved source objects stay intact", () => {
+  const old = {
+    ...newForm("case"),
+    type: "الخروج من الفصل",
+    incidentDetail: "خرج دون استئذان",
+    description: "خرج الطالب من الفصل. التفصيل المسجل: خرج دون استئذان.",
+    descriptionGenerated:
+      "خرج الطالب من الفصل. التفصيل المسجل: خرج دون استئذان.",
+  };
+  const previous = JSON.stringify(old);
+  assert.equal(
+    prepareCaseDraft(old).description,
+    "غادر الطالب الفصل دون استئذان.",
+  );
+  assert.equal(JSON.stringify(old), previous);
+  const manual = {
+    ...old,
+    description: "النص الأصلي الذي كتبه المشرف",
+    incidentNotes: "ملاحظة لاحقة",
+  };
+  assert.equal(prepareCaseDraft(manual).description, manual.description);
+  assert.equal(
+    caseDescription(manual),
+    "النص الأصلي الذي كتبه المشرف\nملاحظة لاحقة",
+  );
+  assert.equal(
+    report(manual)
+      .sections.flatMap((s) => s.lines)
+      .find(([key]) => key === "وصف الواقعة")[1],
+    caseDescription(manual),
+  );
 });

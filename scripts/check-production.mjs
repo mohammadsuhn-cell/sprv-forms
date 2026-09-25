@@ -113,7 +113,11 @@ try {
     0,
   );
   await page.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
-  assert(await page.getByLabel("وصف الواقعة", { exact: true }).isVisible());
+  assert(
+    await page
+      .getByLabel("ملاحظات إضافية (اختياري)", { exact: true })
+      .isVisible(),
+  );
   assert(
     (await page
       .getByLabel("نوع الواقعة", { exact: true })
@@ -138,12 +142,13 @@ try {
   await page
     .getByLabel("تكرار الواقعة", { exact: true })
     .selectOption("تكررت سابقًا");
-  const generated = await page
-    .getByLabel("وصف الواقعة", { exact: true })
-    .inputValue();
+  const preview = page
+    .getByRole("region", { name: "وصف الواقعة", exact: true })
+    .locator("p");
+  const generated = await preview.innerText();
   assert(generated.startsWith("بحسب إفادة منقولة،"));
   for (const text of [
-    "ذكر تأخر وسيلة النقل",
+    "ذكر أن وسيلة النقل تأخرت",
     "الفصل",
     "الأولى",
     "سبق تسجيل الواقعة",
@@ -154,39 +159,35 @@ try {
     await page.getByLabel("تفصيل الواقعة", { exact: true }).inputValue(),
     "",
   );
-  assert(
-    !(
-      await page.getByLabel("وصف الواقعة", { exact: true }).inputValue()
-    ).includes("وسيلة النقل"),
-  );
+  assert(!(await preview.innerText()).includes("وسيلة النقل"));
   await page
     .getByLabel("نوع الواقعة", { exact: true })
     .selectOption("التأخر عن الحصة");
-  await page
-    .getByLabel("وصف الواقعة", { exact: true })
-    .fill("وصف كتبه المشرف يدويًا");
+  const notes = page.getByLabel("ملاحظات إضافية (اختياري)", { exact: true });
+  await notes.fill("ملاحظة إضافية كتبها المشرف");
   await page.getByLabel("الحصة", { exact: true }).selectOption("الثانية");
+  assert.equal(await notes.inputValue(), "ملاحظة إضافية كتبها المشرف");
+  assert((await preview.innerText()).includes("الثانية"));
+  assert((await preview.innerText()).endsWith("ملاحظة إضافية كتبها المشرف"));
   assert.equal(
-    await page.getByLabel("وصف الواقعة", { exact: true }).inputValue(),
-    "وصف كتبه المشرف يدويًا",
+    await page
+      .getByRole("textbox", { name: "وصف الواقعة", exact: true })
+      .count(),
+    0,
   );
-  page.once("dialog", (d) => d.dismiss());
   await page
-    .getByRole("button", { name: "صياغة الوصف من الاختيارات", exact: true })
-    .click();
-  assert.equal(
-    await page.getByLabel("وصف الواقعة", { exact: true }).inputValue(),
-    "وصف كتبه المشرف يدويًا",
-  );
-  page.once("dialog", (d) => d.accept());
+    .getByLabel("نوع الواقعة", { exact: true })
+    .selectOption("الخروج من الفصل");
   await page
-    .getByRole("button", { name: "صياغة الوصف من الاختيارات", exact: true })
-    .click();
-  assert(
-    (
-      await page.getByLabel("وصف الواقعة", { exact: true }).inputValue()
-    ).includes("الثانية"),
-  );
+    .getByLabel("تفصيل الواقعة", { exact: true })
+    .selectOption("خرج دون استئذان");
+  assert((await preview.innerText()).includes("غادر الطالب الفصل دون استئذان"));
+  assert(!(await preview.innerText()).includes("التفصيل المسجل:"));
+  await page
+    .getByLabel("نوع الواقعة", { exact: true })
+    .selectOption("التأخر عن الحصة");
+  await page.getByLabel("الحصة", { exact: true }).selectOption("الأولى");
+  await page.getByLabel("مكان الواقعة", { exact: true }).selectOption("");
   for (const action of ["تعهد خطي", "فصل يوم", "فصل يومين", "فصل ثلاثة أيام"])
     await page
       .getByLabel("الإجراء المتخذ", { exact: true })
@@ -208,10 +209,11 @@ try {
   });
   await page.getByText("تفاصيل إضافية", { exact: true }).click();
   await page
-    .getByLabel("وصف الواقعة", { exact: true })
+    .getByLabel("ملاحظات إضافية (اختياري)", { exact: true })
     .fill(
-      "تأخر الطالب عن الحصة الأولى. تم التواصل مع ولي الأمر لمتابعة الانتظام. الشعبة ٧/٢، الموعد 09:00.",
+      "تم التواصل مع ولي الأمر لمتابعة الانتظام. الشعبة ٧/٢، الموعد 09:00.",
     );
+  const exportDescription = await preview.innerText();
   await page
     .getByLabel("حالة الإجراء", { exact: true })
     .selectOption("لم يُنفّذ بعد");
@@ -220,6 +222,12 @@ try {
     .getByRole("heading", { name: "السجلات والمتابعة", exact: true })
     .waitFor();
   await page.locator(".saved-open").click();
+  assert.equal(await preview.innerText(), exportDescription);
+  const persistedCase = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).drafts.case,
+    storageKey,
+  );
+  assert.equal(persistedCase.description, exportDescription);
   await page.getByText("تصدير", { exact: true }).click();
   for (const [label, ext] of [
     ["PDF", "pdf"],

@@ -3,7 +3,9 @@ import { fields, caseSections } from "./model.js";
 import { StudentPicker } from "./roster-ui.jsx";
 import {
   incidentDetails,
-  composeCaseDescription,
+  caseDescription,
+  hasManualDescription,
+  prepareCaseDraft,
   updateCaseChoice,
   actionStatusLabel,
   noAction,
@@ -22,10 +24,8 @@ export function CaseEditor({ form, roster, grade, lang, onChange, Field }) {
       onChange={(value) => onChange(updateCaseChoice(form, key, value))}
     />
   );
-  const generated = composeCaseDescription(form);
-  const manual =
-    !!form.description?.trim() &&
-    form.description !== form.descriptionGenerated;
+  const description = caseDescription(form);
+  const manual = hasManualDescription(form);
   return (
     <>
       <section className="panel">
@@ -68,38 +68,52 @@ export function CaseEditor({ form, roster, grade, lang, onChange, Field }) {
             choice(key),
           )}
         </div>
+        {manual && (
+          <details className="legacy-description">
+            <summary>
+              {t("الوصف المحفوظ سابقًا", "Previously written description")}
+            </summary>
+            <Field
+              lang={lang}
+              field={{
+                ...fields.description,
+                ar: "الوصف المحفوظ",
+                en: "Saved description",
+              }}
+              value={form.description}
+              onChange={(description) =>
+                onChange(
+                  prepareCaseDraft({
+                    ...form,
+                    description,
+                    descriptionGenerated: "",
+                  }),
+                )
+              }
+            />
+          </details>
+        )}
         <Field
           lang={lang}
-          field={fields.description}
-          value={form.description}
-          onChange={(description) => onChange({ ...form, description })}
+          field={{
+            key: "incidentNotes",
+            ar: "ملاحظات إضافية (اختياري)",
+            en: "Additional notes (optional)",
+            kind: "textarea",
+          }}
+          value={form.incidentNotes || ""}
+          onChange={(value) =>
+            onChange(updateCaseChoice(form, "incidentNotes", value))
+          }
         />
-        {generated && form.description !== generated && (
-          <button
-            className="button description-refresh"
-            onClick={() => {
-              if (
-                manual &&
-                !confirm(
-                  t(
-                    "استبدال الوصف المكتوب بصياغة من الاختيارات الحالية؟",
-                    "Replace the written description with wording from the current selections?",
-                  ),
-                )
-              )
-                return;
-              onChange({
-                ...form,
-                description: generated,
-                descriptionGenerated: generated,
-              });
-            }}
+        {description && (
+          <section
+            className="description-preview"
+            aria-label={t("وصف الواقعة", "Incident description")}
           >
-            {t(
-              "صياغة الوصف من الاختيارات",
-              "Build description from selections",
-            )}
-          </button>
+            <h3>{t("وصف الواقعة", "Incident description")}</h3>
+            <p dir="rtl">{description}</p>
+          </section>
         )}
       </section>
       <section className="panel">

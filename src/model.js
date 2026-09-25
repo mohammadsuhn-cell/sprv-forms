@@ -4,6 +4,8 @@ import {
   recurrenceOptions,
   actionStatusLabel,
   actionText,
+  caseDescription,
+  hasManualDescription,
 } from "./case-options.js";
 import {
   initializeAbsence,
@@ -352,8 +354,10 @@ export function newForm(kind, profile = {}, roster = null) {
     form.from = today();
     form.to = today();
   }
-  if (kind === "case")
+  if (kind === "case") {
     for (const s of caseSections) for (const f of s.fields) form[f.key] = "";
+    form.incidentNotes = "";
+  }
   if (kind === "absence")
     return initializeAbsence(form, roster, profile.grade, uid);
   for (const g of groups[kind]) form[g.key] = [newRow(g)];
@@ -417,16 +421,31 @@ export function report(form) {
   if (form.kind === "case") {
     for (const section of caseSections) {
       const lines = section.fields
-        .filter((f) => String(form[f.key] || "").trim())
+        .filter((f) =>
+          (f.key === "description"
+            ? caseDescription(form)
+            : String(form[f.key] || "")
+          ).trim(),
+        )
+        .filter(
+          (f) =>
+            hasManualDescription(form) ||
+            !form.descriptionGenerated ||
+            !types.includes(form.type) ||
+            form.type === "واقعة أخرى" ||
+            !["incidentDetail", "recurrence"].includes(f.key),
+        )
         .map((f) => [
           f.ar,
-          f.kind === "date"
-            ? dateLabel(form[f.key])
-            : f.key === "actionState"
-              ? actionStatusLabel(form[f.key])
-              : f.key === "action"
-                ? actionText(form[f.key])
-                : form[f.key],
+          f.key === "description"
+            ? caseDescription(form)
+            : f.kind === "date"
+              ? dateLabel(form[f.key])
+              : f.key === "actionState"
+                ? actionStatusLabel(form[f.key])
+                : f.key === "action"
+                  ? actionText(form[f.key])
+                  : form[f.key],
         ]);
       if (lines.length) sections.push({ title: section.ar, lines });
     }
@@ -672,7 +691,7 @@ export function caseRegister(saved, profile = {}) {
     student: s.student || "",
     className: s.className || "",
     type: s.type || "",
-    description: s.description || "",
+    description: caseDescription(s),
     action: actionText(s.action, s.actionState),
     status: s.status || "",
     due: s.due || "",

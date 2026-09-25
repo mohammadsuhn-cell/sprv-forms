@@ -1,4 +1,4 @@
-import { actionText } from "./case-options.js";
+import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
@@ -209,11 +209,11 @@ function App() {
   }
   function openKind(k) {
     setKind(k);
-    if (!data.drafts[k])
-      setData((d) => ({
-        ...d,
-        drafts: { ...d.drafts, [k]: newForm(k, d.profile, d.roster) },
-      }));
+    const existing = data.drafts[k];
+    const draft = existing || newForm(k, data.profile, data.roster);
+    const prepared = k === "case" ? prepareCaseDraft(draft) : draft;
+    if (!existing || JSON.stringify(prepared) !== JSON.stringify(existing))
+      setData((d) => ({ ...d, drafts: { ...d.drafts, [k]: prepared } }));
     setPage("form");
   }
   function startNew() {
@@ -1246,7 +1246,8 @@ function App() {
               )
             )
               return;
-            setDraft(structuredClone(item));
+            const copy = structuredClone(item);
+            setDraft(item.kind === "case" ? prepareCaseDraft(copy) : copy);
             setKind(item.kind);
             setPage("form");
           }}

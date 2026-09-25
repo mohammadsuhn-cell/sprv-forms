@@ -1117,7 +1117,28 @@ h2 {
 .case-facts .field {
   min-width: 0;
 }
-.description-refresh {
-  margin-top: 12px;
-  white-space: normal;
+
+.description-preview {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.description-preview h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.description-preview p {
+  font-size: 16px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.legacy-description {
+  margin-bottom: 18px;
+}
+.legacy-description summary {
+  cursor: pointer;
+  margin-bottom: 12px;
 }
