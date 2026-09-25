@@ -1,3 +1,4 @@
+import { exportStamp, canvasExportFooter } from "./export-stamp.js";
 import { arDigits } from "./model.js";
 
 // Native canvas text keeps Arabic shaping intact in the exported, offline PDF.
@@ -6,10 +7,16 @@ export function renderAbsencePages(report) {
     height = 794,
     margin = 36,
     gridWidth = width - margin * 2;
+  const footer = canvasExportFooter(
+    report.exportStamp || exportStamp(report.supervisor),
+    width,
+    margin,
+  );
+  const extraFooter = Math.max(0, footer.height - 40);
   const gridTop = 180,
     headHeight = 36,
     bodyTop = gridTop + headHeight,
-    bodyHeight = 392;
+    bodyHeight = 392 - extraFooter;
   const pages = [],
     sheet = report.absence;
   const measure = document.createElement("canvas").getContext("2d");
@@ -185,51 +192,32 @@ export function renderAbsencePages(report) {
       totals.forEach(([label, value], i) => {
         const w = gridWidth / 3,
           x = width - margin - (i + 1) * w;
-        box(x, 684, w, 36, "#f0f1ef");
+        box(x, 684 - extraFooter, w, 36, "#f0f1ef");
         text(
           `${label}: ${arDigits(value)}`,
           x + w / 2,
-          709,
+          709 - extraFooter,
           18,
           true,
           "center",
         );
       });
-      const supervisor = wrap(
-        `المشرف: ${report.supervisor}`,
-        gridWidth / 2 - 40,
-        16,
-      );
-      supervisor
-        .slice(0, 2)
-        .forEach((v, i) => text(v, width - margin, 739 + i * 20, 16, true));
       text(
-        "مدير المدرسة: ................................",
-        margin + 380,
-        739,
+        "توقيع المشرف: ................................",
+        width - margin,
+        739 - extraFooter,
         16,
         true,
       );
       text(
-        "التوقيع: ................................",
-        width - margin,
-        779,
-        15,
+        "توقيع مدير المدرسة: ................................",
+        margin + 380,
+        739 - extraFooter,
+        16,
+        true,
       );
-      text("التوقيع: ................................", margin + 380, 779, 15);
-      if (supervisor.length > 2) {
-        // Do not silently clip a long name. This is a validation guard for malformed input.
-        throw new Error("Supervisor name is too long for the signature field");
-      }
     }
-    text(
-      `${arDigits(index + 1)} / ${arDigits(plans.length)}`,
-      width / 2,
-      782,
-      12,
-      false,
-      "center",
-    );
+    footer.draw(ctx, height, `${index + 1} / ${plans.length}`);
     pages.push(canvas);
   });
   return pages;

@@ -21,3 +21,5 @@ The production check uses synthetic records, a temporary browser context and a l
 The build precaches static assets and export libraries for offline use after the first successful visit. Deploy only `dist/`. Never include student rosters, completed forms, backups or the local sprv database. Static hosting needs no domain purchase.
 
 `npm run check:absence` checks the daily absence workflow with synthetic students: per-class confirmations, date changes, reload persistence, saved history, manual corrections, Arabic PDF totals, right-to-left columns, long-list pagination and phone layout. Each sheet retains its class roll snapshot; roster updates do not rewrite history. Start each day with **جديد**. Changing a sheet’s date retains its selections but clears all class confirmations.
+
+Generated PDF, Word and Excel files include the saved supervisor name and a fixed export timestamp in Kuwait time in their page footers. The form’s record date stays separate. Excel displays it in the page footer when printed or opened in print layout. Interface controls use Arabic/English text without decorative icons.

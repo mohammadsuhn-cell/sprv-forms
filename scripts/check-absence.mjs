@@ -179,6 +179,14 @@ try {
   assert.equal(heads.length, 6);
   assert(heads[0].x > heads[5].x);
   assert(drawn.some((d) => d.text === "إجمالي الغياب: ٥٥"));
+  assert(
+    drawn.some(
+      (d) =>
+        d.text.includes("تاريخ التصدير:") &&
+        d.text.includes("مشرف تجريبي") &&
+        d.y > 750,
+    ),
+  );
   assert(drawn.some((d) => d.text === "إجمالي الحضور: ٨٥"));
   assert.equal(new Set(drawn.map((d) => d.page)).size, 1);
   const pdfInfo = execFileSync("pdfinfo", ["test-results/absence-sheet.pdf"], {
@@ -205,6 +213,9 @@ try {
   await page.locator(".export-menu summary").click();
   const longDrawn = await exportPdf("test-results/absence-long.pdf");
   assert(new Set(longDrawn.map((d) => d.page)).size > 1);
+  const stamps = longDrawn.filter((d) => d.text.includes("تاريخ التصدير:"));
+  assert.equal(stamps.length, new Set(longDrawn.map((d) => d.page)).size);
+  assert.equal(new Set(stamps.map((d) => d.text)).size, 1);
   // Each unique numbered suffix is drawn once, including the final student in every column.
   for (let i = 0; i < 140; i++)
     assert.equal(

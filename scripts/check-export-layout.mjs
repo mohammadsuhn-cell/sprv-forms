@@ -160,6 +160,15 @@ try {
     );
     assert(result.count > 1);
     assert.deepEqual(result.overflow, []);
+    const stamps = result.lines.filter((line) =>
+      line.includes("تاريخ التصدير:"),
+    );
+    assert.equal(stamps.length, result.count);
+    assert.equal(
+      new Set(stamps).size,
+      1,
+      "Each page retains the same export timestamp",
+    );
     const text = result.lines.join("\n");
     for (const token of name === "long-case" ? tokens : ["L000", "L044"])
       assert(text.includes(token), token);

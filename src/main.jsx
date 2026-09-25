@@ -1,27 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  FileText,
-  ClipboardList,
-  Users,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Trash2,
-  Settings,
-  FolderOpen,
-  Download,
-  Upload,
-  Check,
-  ArrowRight,
-  ArrowLeft,
-  Search,
-  X,
-  Copy,
-  Share2,
-  Clock3,
-} from "lucide-react";
 import "@fontsource/noto-sans-arabic/400.css";
 import "@fontsource/noto-sans-arabic/600.css";
 import "./style.css";
@@ -451,7 +429,7 @@ function App() {
               {arDigits(index + 1)}
             </span>
             <button
-              className="icon danger"
+              className="text-control danger"
               aria-label={t("حذف السجل", "Delete entry")}
               onClick={() => {
                 if (
@@ -465,7 +443,7 @@ function App() {
                 );
               }}
             >
-              <Trash2 size={17} />
+              {t("حذف", "Delete")}
             </button>
           </div>
           <div className="fields">
@@ -549,7 +527,6 @@ function App() {
         disabled={form[group.key].length >= 100}
         onClick={() => change(group.key, [...form[group.key], newRow(group)])}
       >
-        <Plus size={18} />
         {group.key === "attendance"
           ? t("إضافة شعبة", "Add class")
           : group.key === "students"
@@ -572,9 +549,6 @@ function App() {
     <>
       <header className="topbar">
         <div className="brand">
-          <span className="brand-icon">
-            <FileText size={22} />
-          </span>
           <div>
             <strong>{t("نماذج الإشراف", "Supervision forms")}</strong>
             <span>{t("الإشراف المدرسي", "School supervision")}</span>
@@ -588,11 +562,11 @@ function App() {
             {en ? "العربية" : "EN"}
           </button>
           <button
-            className="icon"
+            className="text-control"
             aria-label={t("الإعدادات", "Settings")}
             onClick={() => setPage("settings")}
           >
-            <Settings size={21} />
+            {t("الإعدادات", "Settings")}
           </button>
         </div>
       </header>
@@ -614,7 +588,6 @@ function App() {
         )}
         {page !== "home" && (
           <button className="back" onClick={() => setPage("home")}>
-            {en ? <ArrowLeft size={18} /> : <ArrowRight size={18} />}{" "}
             {t("النماذج", "Forms")}
           </button>
         )}
@@ -623,16 +596,13 @@ function App() {
             <div className="page-heading">
               <h1>{t("النماذج", "Forms")}</h1>
               <button className="button" onClick={() => setPage("saved")}>
-                <FolderOpen size={18} />
                 {t("السجلات والمتابعة", "Records & follow-up")}
                 <span className="count">{data.saved.length}</span>
               </button>
             </div>
             {!data.profile.supervisor && (
               <button className="setup" onClick={() => setPage("settings")}>
-                <Settings size={20} />
                 <span>{t("إعداد اسم المشرف", "Set supervisor name")}</span>
-                {en ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
               </button>
             )}
             {data.profile.school && (
@@ -659,32 +629,20 @@ function App() {
             )}
             <div className="form-cards">
               {[
-                ["case", "تسجيل حالة", "Record a case", ClipboardList],
-                ["daily", "الموجز اليومي", "Daily brief", CalendarDays],
-                [
-                  "absence",
-                  "إحصائية الغياب اليومي",
-                  "Daily absence sheet",
-                  ClipboardList,
-                ],
-                ["late", "الطلبة المتأخرون", "Late students", Clock3],
-                [
-                  "staffing",
-                  "سجل المعلمين والبدلاء",
-                  "Teachers & substitutes",
-                  Users,
-                ],
-              ].map(([key, ar, english, Icon]) => (
+                ["case", "تسجيل حالة", "Record a case"],
+                ["daily", "الموجز اليومي", "Daily brief"],
+                ["absence", "إحصائية الغياب اليومي", "Daily absence sheet"],
+                ["late", "الطلبة المتأخرون", "Late students"],
+                ["staffing", "سجل المعلمين والبدلاء", "Teachers & substitutes"],
+              ].map(([key, ar, english]) => (
                 <button
                   key={key}
                   className="form-card"
                   onClick={() => openKind(key)}
                 >
-                  <Icon size={23} />
                   <div>
                     <h2>{t(ar, english)}</h2>
                   </div>
-                  {en ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
                 </button>
               ))}
             </div>
@@ -722,7 +680,6 @@ function App() {
                 </span>
               </div>
               <button className="button" onClick={startNew}>
-                <Plus size={17} />
                 {t("جديد", "New")}
               </button>
             </div>
@@ -982,7 +939,6 @@ function App() {
                   disabled={!!busy}
                   onClick={save}
                 >
-                  <Check size={18} />
                   {kind === "case"
                     ? t("حفظ الحالة", "Save record")
                     : t("حفظ النموذج", "Save form")}
@@ -1016,7 +972,6 @@ function App() {
               <span className="count">{data.saved.length}</span>
             </div>
             <label className="search">
-              <Search size={19} />
               <input
                 aria-label={t("بحث في المحفوظات", "Search saved forms")}
                 placeholder={t("اسم الطالب أو التاريخ", "Student name or date")}
@@ -1096,7 +1051,6 @@ function App() {
               />
               <div className="settings-save">
                 <button className="button primary" onClick={saveSettings}>
-                  <Check size={18} />
                   {t("حفظ الإعدادات", "Save settings")}
                 </button>
                 <span className="small-status" role="status">
@@ -1137,7 +1091,6 @@ function App() {
                   disabled={!writeAllowed}
                   onClick={() => rosterRef.current.click()}
                 >
-                  <Upload size={18} />
                   {data.roster
                     ? t("تحديث قائمة الطلبة", "Update roster")
                     : t("تحميل قائمة الطلبة", "Load roster")}
@@ -1204,7 +1157,6 @@ function App() {
               )}
               <div className="backup-buttons">
                 <button className="button" onClick={backup}>
-                  <Download size={18} />
                   {t("تنزيل نسخة احتياطية", "Download backup")}
                 </button>
                 <button
@@ -1212,7 +1164,6 @@ function App() {
                   disabled={!writeAllowed}
                   onClick={() => restoreRef.current.click()}
                 >
-                  <Upload size={18} />
                   {t("استعادة نسخة", "Restore backup")}
                 </button>
               </div>
@@ -1326,7 +1277,6 @@ function App() {
             setPage("form");
           }}
         >
-          <FileText size={21} />
           <div>
             <strong>{item.student || titles[item.kind][en ? 1 : 0]}</strong>
             <span>
@@ -1345,7 +1295,7 @@ function App() {
         </button>
         {remove && (
           <button
-            className="icon danger"
+            className="text-control danger"
             aria-label={t("حذف النسخة", "Delete saved copy")}
             onClick={() => {
               if (
@@ -1360,7 +1310,7 @@ function App() {
               }
             }}
           >
-            <Trash2 size={18} />
+            {t("حذف", "Delete")}
           </button>
         )}
       </div>

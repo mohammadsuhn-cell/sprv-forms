@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import { Search, Plus, Trash2 } from "lucide-react";
 import {
   grades,
   classesForGrade,
@@ -240,7 +239,6 @@ export function LateChecklist({ form, roster, lang, onChange, Field }) {
         </div>
       )}
       <label className="search">
-        <Search size={19} />
         <input
           aria-label={t("بحث في أسماء الشعبة", "Search class students")}
           placeholder={t("بحث بالاسم", "Search by name")}
@@ -337,7 +335,6 @@ export function LateChecklist({ form, roster, lang, onChange, Field }) {
         onClick={() => setManualOpen(!manualOpen)}
         aria-expanded={manualOpen}
       >
-        <Plus size={18} />
         {t("إضافة اسم غير موجود", "Add a missing name")}
       </button>
       {manualOpen && (
@@ -419,14 +416,14 @@ export function LateChecklist({ form, roster, lang, onChange, Field }) {
                   {row.student} <small>{row.className}</small>
                 </strong>
                 <button
-                  className="icon danger"
+                  className="text-control danger"
                   aria-label={t(
                     `إزالة ${row.student}`,
                     `Remove ${row.student}`,
                   )}
                   onClick={() => remove(row)}
                 >
-                  <Trash2 size={18} />
+                  {t("إزالة", "Remove")}
                 </button>
               </div>
               <details className="row-options">

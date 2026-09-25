@@ -90,17 +90,21 @@ svg {
   align-items: center;
   gap: 8px;
 }
-.icon {
+.text-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 42px;
-  min-height: 42px;
+  min-height: 44px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   border-radius: 6px;
 }
-.icon:hover {
+.text-control:hover {
   background: #eef2f4;
 }
 .language {
@@ -1092,4 +1096,14 @@ h2 {
   padding: 16px;
   background: #edf0ec;
   border: 1px solid #d9ddd7;
+}
+
+.absence-class-tabs .button {
+  flex-direction: column;
+  gap: 0;
+}
+.class-confirmed {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
 }

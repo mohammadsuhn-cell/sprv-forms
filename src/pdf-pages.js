@@ -1,3 +1,4 @@
+import { exportStamp, canvasExportFooter } from "./export-stamp.js";
 import { renderAbsencePages } from "./absence-pages.js";
 import { printStyle as colors, columnPercentages } from "./export-style.js";
 
@@ -12,7 +13,12 @@ export async function renderPages(r) {
   const width = r.landscape ? 1123 : 794,
     height = r.landscape ? 794 : 1123,
     margin = 44,
-    bottom = height - 60,
+    footer = canvasExportFooter(
+      r.exportStamp || exportStamp(r.supervisor),
+      width,
+      margin,
+    ),
+    bottom = height - Math.max(60, footer.height + 12),
     contentWidth = width - margin * 2;
   const pages = [];
   let canvas, ctx, y;
@@ -96,14 +102,7 @@ export async function renderPages(r) {
     ctx.fillStyle = "#fff";
     ctx.fillText(r.title, width / 2, y + 35);
     y += 70;
-    draw(
-      String(pages.length).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]),
-      width / 2,
-      height - 39,
-      11,
-      false,
-      colors.muted,
-    );
+    footer.draw(ctx, height, pages.length);
   };
   const ensure = (h) => {
     if (y + h > bottom) newPage();

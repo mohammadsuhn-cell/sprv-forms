@@ -167,8 +167,21 @@ try {
   const drawn = await page.evaluate(() => window.drawnLines.join("\n"));
   assert(drawn.includes("تأخر الطالب عن الحصة الأولى."));
   assert(drawn.includes("مخطط للتنفيذ"));
+  assert(drawn.includes("تاريخ التصدير:"));
+  assert(drawn.includes("(الكويت)"));
+  const footerXml = execFileSync(
+    "unzip",
+    ["-p", "test-results/simple-case.docx", "word/footer1.xml"],
+    { encoding: "utf8" },
+  );
+  assert(footerXml.includes("تاريخ التصدير:"));
+  assert(footerXml.includes("مشرف تجريبي"));
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile("test-results/simple-case.xlsx");
+  for (const sheet of wb.worksheets) {
+    assert(sheet.headerFooter.oddFooter.includes("تاريخ التصدير:"));
+    assert(sheet.headerFooter.oddFooter.includes("مشرف تجريبي"));
+  }
   assert.equal(
     wb.worksheets[0].getCell("E6").value,
     "إنذار أول (مخطط للتنفيذ)",

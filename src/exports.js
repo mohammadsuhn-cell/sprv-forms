@@ -1,3 +1,4 @@
+import { exportStamp } from "./export-stamp.js";
 import { report, withSchoolIdentity, letterhead } from "./model.js";
 import { printStyle as colors, columnPercentages } from "./export-style.js";
 export const fileName = (form, extension) =>
@@ -19,6 +20,7 @@ export function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 export async function wordBlob(form) {
+  const stamp = exportStamp(form.supervisor);
   const {
     Document,
     Packer,
@@ -261,7 +263,8 @@ export async function wordBlob(form) {
             },
             margin: {
               top: 1900,
-              bottom: 720,
+              bottom: 1100,
+              footer: 360,
               left: 720,
               right: 720,
               header: 500,
@@ -272,6 +275,7 @@ export async function wordBlob(form) {
         footers: {
           default: new Footer({
             children: [
+              p(stamp.text, { size: 18, color: colors.muted, center: true }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
@@ -292,11 +296,12 @@ export async function wordBlob(form) {
   return Packer.toBlob(doc);
 }
 export async function pdfBlob(form) {
+  const stamp = exportStamp(form.supervisor);
   const [{ renderPages }, { jsPDF }] = await Promise.all([
     import("./pdf-pages.js"),
     import("jspdf"),
   ]);
-  const r = report(form),
+  const r = { ...report(form), exportStamp: stamp },
     pages = await renderPages(r);
   try {
     const pdf = new jsPDF({
@@ -402,6 +407,7 @@ function styleExcelSheet(
 }
 
 export async function excelBlob(form) {
+  const stamp = exportStamp(form.supervisor);
   form = withSchoolIdentity(form);
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
@@ -537,7 +543,10 @@ export async function excelBlob(form) {
               );
       });
     }
-    for (const sheet of wb.worksheets) styleExcelSheet(sheet);
+    for (const sheet of wb.worksheets) {
+      styleExcelSheet(sheet);
+      stampExcelSheet(sheet, stamp);
+    }
     return new Blob([await wb.xlsx.writeBuffer()], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
@@ -637,8 +646,15 @@ export async function excelBlob(form) {
   for (const sheet of wb.worksheets) {
     styleExcelSheet(sheet, { sectionRows: sheet._printSectionRows || [] });
     delete sheet._printSectionRows;
+    stampExcelSheet(sheet, stamp);
   }
   return new Blob([await wb.xlsx.writeBuffer()], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+}
+
+function stampExcelSheet(sheet, stamp) {
+  const escape = (value) => value.replace(/&/g, "&&");
+  sheet.headerFooter.oddFooter = `&C&"Arial,Regular"&9${escape(stamp.name)}\n${escape(stamp.generated)}&L&P / &N`;
+  sheet.pageSetup.margins.bottom = 0.65;
 }

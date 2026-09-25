@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import { Check } from "lucide-react";
 import { uid, arDigits } from "./model.js";
 import { rosterGrades } from "./roster.js";
 import {
@@ -105,7 +104,9 @@ export function AbsenceChecklist({
                 >
                   {c.className}
                   {c.confirmed === "yes" && (
-                    <Check size={16} aria-label={t("مؤكدة", "Confirmed")} />
+                    <span className="class-confirmed">
+                      {t("مؤكدة", "Confirmed")}
+                    </span>
                   )}
                 </button>
               ))}
@@ -278,7 +279,6 @@ export function AbsenceChecklist({
               top.current?.scrollIntoView({ block: "start" });
             }}
           >
-            <Check size={18} />
             {t("تأكيد الشعبة والمتابعة", "Confirm class and continue")}
           </button>
           {summary.ready && (
