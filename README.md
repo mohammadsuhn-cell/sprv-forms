@@ -2,7 +2,7 @@
 
 Arabic phone forms, separate from the local sprv register. The home screen offers five forms:
 
-- Case details: six initial fields, optional extra details and follow-up dates.
+- Case details: grouped incident types, dependent detail choices, location/period/source/recurrence dropdowns and an editable Arabic description built from selected facts. Manual descriptions are preserved; rebuilding them requires an explicit replacement. Short action choices include a written undertaking and one-, two- or three-day suspension. Pending actions display as «لم يُنفّذ بعد», including historical exports, without rewriting saved records.
 - Daily brief: attendance and morning lateness counts by class, optional late student names, expandable teacher/substitute and facilities sections, notes and actions.
 - Teachers and substitutes: cover periods first, optional absence and late-arrival details.
 - Daily absence sheet: tick absent students by class from a locally loaded roster, confirm every class (including zero absences), and export an Arabic landscape A4 PDF matching the paper grid. Class and grade totals are calculated from enrollment and selections. Enrollment can be corrected and missing absent names added. PDF only for this form.

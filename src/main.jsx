@@ -1,3 +1,5 @@
+import { actionText } from "./case-options.js";
+import { CaseEditor } from "./case-editor.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/noto-sans-arabic/400.css";
@@ -29,7 +31,7 @@ import {
 } from "./model.js";
 import { download, fileName } from "./exports.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
-import { StudentPicker, LateChecklist } from "./roster-ui.jsx";
+import { LateChecklist } from "./roster-ui.jsx";
 import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
 function read() {
@@ -67,9 +69,20 @@ function Field({ field, value, onChange, lang, disabled = false }) {
       {field.kind === "select" ? (
         <select {...common}>
           <option value="">{t("اختر", "Select")}</option>
-          {field.options.map((x) => (
-            <option key={x}>{x}</option>
-          ))}
+          {value && !field.options.includes(value) && (
+            <option value={value}>
+              {field.key === "action" ? actionText(value) : value}
+            </option>
+          )}
+          {field.optionGroups
+            ? field.optionGroups.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </optgroup>
+              ))
+            : field.options.map((x) => <option key={x}>{x}</option>)}
         </select>
       ) : field.kind === "textarea" ? (
         <textarea {...common} rows={3} maxLength={6000} />
@@ -714,60 +727,14 @@ function App() {
               />
             ) : kind === "case" ? (
               <>
-                <section className="panel">
-                  <div className="fields">
-                    {data.roster && (
-                      <StudentPicker
-                        form={form}
-                        roster={data.roster}
-                        grade={data.profile.grade}
-                        lang={data.lang}
-                        onChange={setDraft}
-                      />
-                    )}
-                    {[
-                      fields.date,
-                      fields.student,
-                      fields.className,
-                      fields.type,
-                      fields.action,
-                      {
-                        ...fields.due,
-                        ar: "موعد المتابعة (اختياري)",
-                        en: "Follow-up date (optional)",
-                      },
-                    ]
-                      .filter(
-                        (f) =>
-                          !data.roster ||
-                          !["student", "className"].includes(f.key),
-                      )
-                      .map((f) => (
-                        <Field
-                          key={f.key}
-                          lang={data.lang}
-                          field={f}
-                          value={form[f.key]}
-                          onChange={(v) => {
-                            const next = { ...form, [f.key]: v };
-                            if (
-                              f.key === "action" &&
-                              !form.actionState &&
-                              v &&
-                              v !== "لم يُتخذ إجراء بعد"
-                            )
-                              next.actionState = "تم التنفيذ";
-                            if (
-                              f.key === "action" &&
-                              (!v || v === "لم يُتخذ إجراء بعد")
-                            )
-                              next.actionState = "";
-                            setDraft(next);
-                          }}
-                        />
-                      ))}
-                  </div>
-                </section>
+                <CaseEditor
+                  form={form}
+                  roster={data.roster}
+                  grade={data.profile.grade}
+                  lang={data.lang}
+                  onChange={setDraft}
+                  Field={Field}
+                />
                 <details className="panel optional">
                   <summary>{t("تفاصيل إضافية", "Additional details")}</summary>
                   {caseSections.map((section) => (
@@ -781,7 +748,14 @@ function App() {
                                 "student",
                                 "className",
                                 "type",
+                                "description",
+                                "location",
+                                "period",
+                                "source",
+                                "incidentDetail",
+                                "recurrence",
                                 "action",
+                                "actionState",
                                 "due",
                               ].includes(f.key),
                           )

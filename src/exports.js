@@ -1,3 +1,4 @@
+import { actionText } from "./case-options.js";
 import { exportStamp } from "./export-stamp.js";
 import { report, withSchoolIdentity, letterhead } from "./model.js";
 import { printStyle as colors, columnPercentages } from "./export-style.js";
@@ -571,8 +572,7 @@ export async function excelBlob(form) {
           v.student,
           v.className,
           v.type,
-          (v.action || "") +
-            (v.actionState === "مخطط للتنفيذ" ? " (مخطط للتنفيذ)" : ""),
+          actionText(v.action, v.actionState),
           v.due,
         ].map((v) => String(v || "")),
       ),

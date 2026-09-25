@@ -60,12 +60,12 @@ const xml = execFileSync(
 );
 for (const token of tokens) assert(xml.includes(token));
 assert(xml.includes("نهاية السجل المحفوظ"));
-assert(xml.includes("مخطط للتنفيذ"));
+assert(xml.includes("لم يُنفّذ بعد"));
 const book = new ExcelJS.Workbook();
 await book.xlsx.readFile("test-results/long-case.xlsx");
 assert.equal(
   book.worksheets[0].getCell("E6").value,
-  "إنذار أول (مخطط للتنفيذ)",
+  "إنذار أول (لم يُنفّذ بعد)",
 );
 const values = [];
 book

@@ -55,7 +55,7 @@ test("reports preserve source narratives and planned action distinction", () => 
   v.outcome = "";
   const r = report(v);
   const text = JSON.stringify(r);
-  assert(text.includes("مخطط للتنفيذ"));
+  assert(text.includes("لم يُنفّذ بعد"));
   assert(text.includes("<script>"));
   assert(!text.includes("تم التنفيذ"));
   assert.deepEqual(validateForm(v), []);
@@ -94,7 +94,7 @@ test("simple register preserves planned actions and includes only individual cas
     supervisor: "مشرف",
   });
   assert.equal(r.rows.length, 1);
-  assert.equal(r.rows[0].action, "إنذار أول (مخطط للتنفيذ)");
+  assert.equal(r.rows[0].action, "إنذار أول (لم يُنفّذ بعد)");
   assert.equal(r.from, "2026-09-22");
   assert.equal(r.to, "2026-09-22");
   assert.equal(r.rows[0].due, "2026-09-25");

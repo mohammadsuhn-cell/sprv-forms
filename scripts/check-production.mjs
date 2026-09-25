@@ -113,9 +113,12 @@ try {
     0,
   );
   await page.getByRole("button", { name: "تسجيل حالة", exact: true }).click();
-  assert.equal(
-    await page.locator("input:visible,select:visible,textarea:visible").count(),
-    6,
+  assert(await page.getByLabel("وصف الواقعة", { exact: true }).isVisible());
+  assert(
+    (await page
+      .getByLabel("نوع الواقعة", { exact: true })
+      .locator("option")
+      .count()) > 30,
   );
   await page
     .getByLabel("اسم الطالب", { exact: true })
@@ -124,6 +127,70 @@ try {
   await page
     .getByLabel("نوع الواقعة", { exact: true })
     .selectOption("التأخر عن الحصة");
+  await page
+    .getByLabel("تفصيل الواقعة", { exact: true })
+    .selectOption("ذكر تأخر وسيلة النقل");
+  await page.getByLabel("مكان الواقعة", { exact: true }).selectOption("الفصل");
+  await page.getByLabel("الحصة", { exact: true }).selectOption("الأولى");
+  await page
+    .getByLabel("مصدر المعلومات", { exact: true })
+    .selectOption("إفادة منقولة");
+  await page
+    .getByLabel("تكرار الواقعة", { exact: true })
+    .selectOption("تكررت سابقًا");
+  const generated = await page
+    .getByLabel("وصف الواقعة", { exact: true })
+    .inputValue();
+  assert(generated.startsWith("بحسب إفادة منقولة،"));
+  for (const text of [
+    "ذكر تأخر وسيلة النقل",
+    "الفصل",
+    "الأولى",
+    "سبق تسجيل الواقعة",
+  ])
+    assert(generated.includes(text));
+  await page.getByLabel("نوع الواقعة", { exact: true }).selectOption("شجار");
+  assert.equal(
+    await page.getByLabel("تفصيل الواقعة", { exact: true }).inputValue(),
+    "",
+  );
+  assert(
+    !(
+      await page.getByLabel("وصف الواقعة", { exact: true }).inputValue()
+    ).includes("وسيلة النقل"),
+  );
+  await page
+    .getByLabel("نوع الواقعة", { exact: true })
+    .selectOption("التأخر عن الحصة");
+  await page
+    .getByLabel("وصف الواقعة", { exact: true })
+    .fill("وصف كتبه المشرف يدويًا");
+  await page.getByLabel("الحصة", { exact: true }).selectOption("الثانية");
+  assert.equal(
+    await page.getByLabel("وصف الواقعة", { exact: true }).inputValue(),
+    "وصف كتبه المشرف يدويًا",
+  );
+  page.once("dialog", (d) => d.dismiss());
+  await page
+    .getByRole("button", { name: "صياغة الوصف من الاختيارات", exact: true })
+    .click();
+  assert.equal(
+    await page.getByLabel("وصف الواقعة", { exact: true }).inputValue(),
+    "وصف كتبه المشرف يدويًا",
+  );
+  page.once("dialog", (d) => d.accept());
+  await page
+    .getByRole("button", { name: "صياغة الوصف من الاختيارات", exact: true })
+    .click();
+  assert(
+    (
+      await page.getByLabel("وصف الواقعة", { exact: true }).inputValue()
+    ).includes("الثانية"),
+  );
+  for (const action of ["تعهد خطي", "فصل يوم", "فصل يومين", "فصل ثلاثة أيام"])
+    await page
+      .getByLabel("الإجراء المتخذ", { exact: true })
+      .selectOption(action);
   await page
     .getByLabel("الإجراء المتخذ", { exact: true })
     .selectOption("إنذار أول");
@@ -147,7 +214,7 @@ try {
     );
   await page
     .getByLabel("حالة الإجراء", { exact: true })
-    .selectOption("مخطط للتنفيذ");
+    .selectOption("لم يُنفّذ بعد");
   await page.getByRole("button", { name: "حفظ الحالة", exact: true }).click();
   await page
     .getByRole("heading", { name: "السجلات والمتابعة", exact: true })
@@ -166,7 +233,7 @@ try {
   }
   const drawn = await page.evaluate(() => window.drawnLines.join("\n"));
   assert(drawn.includes("تأخر الطالب عن الحصة الأولى."));
-  assert(drawn.includes("مخطط للتنفيذ"));
+  assert(drawn.includes("لم يُنفّذ بعد"));
   assert(drawn.includes("تاريخ التصدير:"));
   assert(drawn.includes("(الكويت)"));
   const footerXml = execFileSync(
@@ -184,7 +251,7 @@ try {
   }
   assert.equal(
     wb.worksheets[0].getCell("E6").value,
-    "إنذار أول (مخطط للتنفيذ)",
+    "إنذار أول (لم يُنفّذ بعد)",
   );
   await page.getByRole("button", { name: "النماذج", exact: true }).click();
   await page.getByRole("button", { name: /السجلات والمتابعة/ }).click();
@@ -427,7 +494,7 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(uploads, []);
   console.log(
-    "PASS: four simple forms, dependent Arabic grade/class dropdowns, lateness persistence and exports, daily attendance/lateness/names/cover/facilities exports, official headers, six-field mobile entry, local save/edit, planned action preserved, Word/PDF/Excel, long Arabic table pagination, legacy drafts retained, English, offline PDF and zero form uploads.",
+    "PASS: four simple forms, dependent Arabic grade/class dropdowns, lateness persistence and exports, daily attendance/lateness/names/cover/facilities exports, official headers, dropdown-assisted case entry, local save/edit, planned action preserved, Word/PDF/Excel, long Arabic table pagination, legacy drafts retained, English, offline PDF and zero form uploads.",
   );
 } finally {
   if (browser) await browser.close();

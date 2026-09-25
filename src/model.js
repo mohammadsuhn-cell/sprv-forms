@@ -1,4 +1,11 @@
 import {
+  incidentTypes,
+  incidentGroups,
+  recurrenceOptions,
+  actionStatusLabel,
+  actionText,
+} from "./case-options.js";
+import {
   initializeAbsence,
   validateAbsence,
   absenceReport,
@@ -34,35 +41,22 @@ export function classesForGrade(grade) {
     arDigits(`${index + 6}/${i + 1}`),
   );
 }
-export const types = [
-  "التأخر عن الحصة",
-  "عدم حضور الحصة",
-  "الخروج من الفصل",
-  "عدم العودة بعد الاستئذان",
-  "الإزعاج أثناء الحصة",
-  "مقاطعة الشرح",
-  "عدم الالتزام بالتعليمات",
-  "مشادة لفظية",
-  "شجار",
-  "ألفاظ غير لائقة",
-  "دفع طالب",
-  "الجري في الممرات",
-  "إتلاف ممتلكات",
-  "الكتابة على الأثاث",
-  "رمي المخلفات",
-  "واقعة أخرى",
-];
+export const types = incidentTypes;
 export const actions = [
-  "لم يُتخذ إجراء بعد",
+  "لم يُتخذ إجراء",
   "تنبيه شفهي",
   "إنذار أول",
   "إنذار ثانٍ",
-  "التواصل مع ولي الأمر",
-  "إعداد استدعاء ولي الأمر",
+  "تعهد خطي",
+  "فصل يوم",
+  "فصل يومين",
+  "فصل ثلاثة أيام",
+  "اتصال بولي الأمر",
+  "استدعاء ولي الأمر",
   "مقابلة ولي الأمر",
-  "إحالة إلى الأخصائي الاجتماعي",
-  "رفع الموضوع إلى الإدارة",
-  "متابعة انتظام الطالب",
+  "إحالة للأخصائي",
+  "إحالة للإدارة",
+  "متابعة",
   "توثيق تحسن",
   "إجراء آخر",
 ];
@@ -82,6 +76,9 @@ export const locations = [
   "المختبر",
   "المكتبة",
   "الصالة الرياضية",
+  "بوابة المدرسة",
+  "دورات المياه",
+  "الدرج",
   "مكان آخر",
 ];
 export const periods = [
@@ -119,7 +116,10 @@ export const fields = {
   date: f("date", "التاريخ", "Date", "date"),
   student: f("student", "اسم الطالب", "Student name"),
   className: f("className", "الشعبة", "Class"),
-  type: f("type", "نوع الواقعة", "Incident type", "select", types),
+  type: {
+    ...f("type", "نوع الواقعة", "Incident type", "select", types),
+    optionGroups: incidentGroups,
+  },
   description: f("description", "وصف الواقعة", "Description", "textarea"),
   action: f("action", "الإجراء المتخذ", "Action", "select", actions),
   status: f("status", "حالة المتابعة", "Follow-up status", "select", statuses),
@@ -278,6 +278,14 @@ export const caseSections = [
       f("reference", "رقم الحالة", "Reference"),
       f("location", "مكان الواقعة", "Location", "select", locations),
       fields.type,
+      f("incidentDetail", "تفصيل الواقعة", "Incident detail", "select", []),
+      f(
+        "recurrence",
+        "تكرار الواقعة",
+        "Recurrence",
+        "select",
+        recurrenceOptions,
+      ),
       f("period", "الحصة", "Period", "select", periods),
       f("source", "مصدر المعلومات", "Source", "select", [
         "مشاهدة مباشرة",
@@ -295,7 +303,7 @@ export const caseSections = [
       fields.action,
       f("actionState", "حالة الإجراء", "Action status", "select", [
         "تم التنفيذ",
-        "مخطط للتنفيذ",
+        "لم يُنفّذ بعد",
       ]),
       f("actionDate", "تاريخ الإجراء", "Action date", "date"),
       f("actionDetails", "تفاصيل الإجراء", "Action details", "textarea"),
@@ -412,7 +420,13 @@ export function report(form) {
         .filter((f) => String(form[f.key] || "").trim())
         .map((f) => [
           f.ar,
-          f.kind === "date" ? dateLabel(form[f.key]) : form[f.key],
+          f.kind === "date"
+            ? dateLabel(form[f.key])
+            : f.key === "actionState"
+              ? actionStatusLabel(form[f.key])
+              : f.key === "action"
+                ? actionText(form[f.key])
+                : form[f.key],
         ]);
       if (lines.length) sections.push({ title: section.ar, lines });
     }
@@ -442,7 +456,9 @@ export function report(form) {
             ? dateLabel(row[f.key])
             : f.kind === "number"
               ? arDigits(row[f.key])
-              : row[f.key] || "",
+              : f.key === "action"
+                ? actionText(row[f.key])
+                : row[f.key] || "",
         ),
       );
       if (rows.length)
@@ -657,9 +673,7 @@ export function caseRegister(saved, profile = {}) {
     className: s.className || "",
     type: s.type || "",
     description: s.description || "",
-    action:
-      (s.action || "") +
-      (s.action && s.actionState === "مخطط للتنفيذ" ? " (مخطط للتنفيذ)" : ""),
+    action: actionText(s.action, s.actionState),
     status: s.status || "",
     due: s.due || "",
   }));
