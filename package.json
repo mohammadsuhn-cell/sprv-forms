@@ -14,7 +14,8 @@
     "check:interactions": "node scripts/check-interactions.mjs",
     "check:roster": "node scripts/check-roster.mjs",
     "check:file-flow": "node scripts/check-file-flow.mjs",
-    "check:absence": "node scripts/check-absence.mjs"
+    "check:absence": "node scripts/check-absence.mjs",
+    "check:daily": "node scripts/check-daily.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-arabic": "5.3.0",

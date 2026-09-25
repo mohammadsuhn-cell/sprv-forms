@@ -34,6 +34,8 @@ import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 import { LateChecklist } from "./roster-ui.jsx";
 import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
+import { DailyBrief } from "./daily-brief-ui.jsx";
+import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 function read() {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -199,7 +201,16 @@ function App() {
     setData((d) => ({ ...d, drafts: { ...d.drafts, [value.kind]: value } }));
   }
   function change(key, value) {
-    setDraft({ ...form, [key]: value });
+    const changed = { ...form, [key]: value };
+    setDraft(
+      isLinkedDaily(form) && key === "supervisor"
+        ? refreshDailyBrief(
+            { ...changed, lateZero: "", staffZero: "" },
+            data.saved,
+            data.roster,
+          )
+        : changed,
+    );
     if (["school", "supervisor", "year"].includes(key))
       setData((d) =>
         key === "supervisor"
@@ -211,7 +222,12 @@ function App() {
     setKind(k);
     const existing = data.drafts[k];
     const draft = existing || newForm(k, data.profile, data.roster);
-    const prepared = k === "case" ? prepareCaseDraft(draft) : draft;
+    const prepared =
+      k === "case"
+        ? prepareCaseDraft(draft)
+        : isLinkedDaily(draft) && !draft.savedAt
+          ? refreshDailyBrief(draft, data.saved, data.roster)
+          : draft;
     if (!existing || JSON.stringify(prepared) !== JSON.stringify(existing))
       setData((d) => ({ ...d, drafts: { ...d.drafts, [k]: prepared } }));
     setPage("form");
@@ -229,7 +245,12 @@ function App() {
       )
     )
       return;
-    setDraft(newForm(kind, data.profile, data.roster));
+    const fresh = newForm(
+      kind,
+      { ...data.profile, grade: form.grade || data.profile.grade },
+      data.roster,
+    );
+    setDraft(refreshDailyBrief(fresh, data.saved, data.roster));
     setErrors([]);
   }
   function check() {
@@ -725,6 +746,15 @@ function App() {
                 onSettings={() => setPage("settings")}
                 Field={Field}
               />
+            ) : isLinkedDaily(form) ? (
+              <DailyBrief
+                form={form}
+                saved={data.saved}
+                roster={data.roster}
+                lang={data.lang}
+                onChange={setDraft}
+                Field={Field}
+              />
             ) : kind === "case" ? (
               <>
                 <CaseEditor
@@ -779,6 +809,19 @@ function App() {
                   <section className="panel">
                     <div className="fields">
                       {field("date", "التاريخ", "Date", "date")}
+                      {kind === "staffing" && (
+                        <Field
+                          lang={data.lang}
+                          field={{
+                            ar: "الصف",
+                            en: "Grade",
+                            kind: "select",
+                            options: grades,
+                          }}
+                          value={form.grade || ""}
+                          onChange={(value) => change("grade", value)}
+                        />
+                      )}
                       {kind === "late" && form.rosterMode !== "yes" && (
                         <>
                           <Field
@@ -1256,8 +1299,9 @@ function App() {
             <strong>{item.student || titles[item.kind][en ? 1 : 0]}</strong>
             <span>
               {dateLabel(item.date)} ·{" "}
-              {(item.kind === "absence" ? item.grade : item.className) ||
-                titles[item.kind][en ? 1 : 0]}
+              {(["absence", "daily", "staffing"].includes(item.kind)
+                ? item.grade
+                : item.className) || titles[item.kind][en ? 1 : 0]}
               {item.due && (
                 <span>
                   {t("المتابعة: ", "Follow-up: ")}

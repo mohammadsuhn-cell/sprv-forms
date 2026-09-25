@@ -334,40 +334,16 @@ try {
   await entry
     .getByRole("button", { name: "الموجز اليومي", exact: true })
     .click();
-  assert.equal(
-    await entry
-      .locator("input:visible,select:visible,textarea:visible")
-      .count(),
-    5,
-  );
+  await entry.getByLabel("الصف", { exact: true }).selectOption("الصف السابع");
+  assert.equal(await entry.locator(".brief-attendance tbody tr").count(), 0);
   await entry
-    .getByLabel("الشعبة", { exact: true })
-    .filter({ visible: true })
-    .fill("٧/١");
-  await entry.getByLabel("الحاضرون", { exact: true }).fill("20");
-  await entry.getByLabel("الغائبون", { exact: true }).fill("3");
-  await entry.getByLabel("المتأخرون صباحًا", { exact: true }).fill("2");
-  await entry.getByText("الأسماء وتفاصيل إضافية", { exact: true }).click();
-  await entry
-    .getByLabel("أسماء المتأخرين (اختياري)", { exact: true })
-    .fill("طالب أول\nطالب ثان");
-  await entry
-    .locator("summary")
-    .filter({ hasText: "غياب المعلمين والبدلاء" })
+    .getByRole("button", { name: "تأكيد عدم وجود متأخرين", exact: true })
     .click();
-  await entry.getByLabel("المعلم الغائب", { exact: true }).fill("معلم تجريبي");
-  await entry.getByLabel("البديل", { exact: true }).fill("بديل تجريبي");
   await entry
-    .getByLabel("حالة التغطية", { exact: true })
-    .selectOption("حضر البديل");
-  await entry
-    .locator("summary")
-    .filter({ hasText: "الأعطال والاحتياجات" })
+    .getByRole("button", { name: "تأكيد عدم وجود غياب أو احتياط", exact: true })
     .click();
-  await entry.getByLabel("الموقع", { exact: true }).selectOption("الفصل");
-  await entry.getByLabel("نوع الاحتياج", { exact: true }).selectOption("تكييف");
   await entry
-    .getByLabel("التفاصيل والمتابعة", { exact: true })
+    .getByLabel("الأعطال والإصلاحات (اختياري)", { exact: true })
     .fill("تعطل التكييف، تم إبلاغ الصيانة.");
   await entry.getByRole("button", { name: "حفظ النموذج", exact: true }).click();
   await entry.locator(".saved-open").click();
@@ -388,9 +364,9 @@ try {
   for (const text of [
     "وزارة التربية",
     "منطقة الفروانية التعليمية",
-    "المتأخرون صباحًا",
-    "طالب ثان",
-    "معلم تجريبي",
+    "المتأخرون",
+    "الحالات المسجلة",
+    "لم يُسجّل",
     "تعطل التكييف",
   ])
     assert(bookText.includes(text), text);
@@ -402,9 +378,10 @@ try {
     await entry
       .locator("input:visible,select:visible,textarea:visible")
       .count(),
-    6,
+    7,
   );
   await entry.getByLabel("المعلم الأصلي", { exact: true }).fill("معلم تجريبي");
+  await entry.getByLabel("الصف", { exact: true }).selectOption("الصف السابع");
   await entry.getByLabel("الحصة", { exact: true }).selectOption("الأولى");
   await entry
     .getByLabel("الشعبة", { exact: true })

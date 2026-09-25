@@ -94,7 +94,12 @@ export async function wordBlob(form) {
       columnSpan: span,
       shading: { fill },
       verticalAlign: VerticalAlign.CENTER,
-      margins: { top: 115, bottom: 115, left: 140, right: 140 },
+      margins: {
+        top: r.layout === "daily" ? 70 : 115,
+        bottom: r.layout === "daily" ? 70 : 115,
+        left: 140,
+        right: 140,
+      },
       children: [p(text, options)],
     });
   const noBorders = Object.fromEntries(
@@ -151,7 +156,13 @@ export async function wordBlob(form) {
             children: row.map((c) =>
               cell(c, {
                 size: 26,
-                fill: index % 2 ? colors.stripe : colors.white,
+                bold: t.totalRow && index === t.rows.length - 1,
+                fill:
+                  t.totalRow && index === t.rows.length - 1
+                    ? colors.soft
+                    : index % 2
+                      ? colors.stripe
+                      : colors.white,
               }),
             ),
           }),
@@ -221,7 +232,7 @@ export async function wordBlob(form) {
   if (head.issued)
     headerChildren.push(p(head.issued, { size: 23, center: true }));
   const children = [
-    grid([17, 33, 17, 33], metaRows),
+    grid(r.layout === "daily" ? [21, 29, 21, 29] : [17, 33, 17, 33], metaRows),
     spacer(),
     ...r.tables.flatMap((t) => [table(t), spacer()]),
     ...r.sections.flatMap((s) => [section(s), spacer()]),
@@ -556,6 +567,7 @@ export async function excelBlob(form) {
       if (part.columns.length === 1)
         for (let row = 6; row <= sheet.rowCount; row++)
           sheet.mergeCells(row, 1, row, count);
+      if (part.totalRow) sectionRows.set(sheet.id, [sheet.rowCount]);
     }
   }
   for (const sheet of wb.worksheets) {

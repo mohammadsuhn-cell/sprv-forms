@@ -11,6 +11,19 @@ import {
   groups,
   newRow,
 } from "../src/model.js";
+function legacyDaily(profile = {}) {
+  const form = newForm("daily", profile);
+  for (const key of [
+    "dailyMode",
+    "summary",
+    "repairs",
+    "grade",
+    "lateZero",
+    "staffZero",
+  ])
+    delete form[key];
+  return form;
+}
 test("new forms retain profile, start blank, and isolate copies", () => {
   for (const kind of ["cases", "case", "daily", "staffing"]) {
     const profile = {
@@ -30,12 +43,13 @@ test("new forms retain profile, start blank, and isolate copies", () => {
         a[groups[kind][0].key][0].id,
         b[groups[kind][0].key][0].id,
       );
-      assert.equal(report(a).tables.length, 0);
+      if (kind === "daily") assert.equal(a.summary, null);
+      else assert.equal(report(a).tables.length, 0);
     }
   }
 });
 test("blank numeric attendance differs from explicit zero", () => {
-  const v = newForm("daily", { school: "مدرسة", supervisor: "مشرف" });
+  const v = legacyDaily({ school: "مدرسة", supervisor: "مشرف" });
   v.attendance[0].className = "٧/١";
   v.attendance[0].present = "0";
   v.attendance[0].absent = "";
@@ -130,8 +144,8 @@ test("shared school headers apply to restored drafts and exports without changin
   assert(JSON.stringify(exported).includes("تفاصيل محفوظة"));
 });
 
-test("daily brief retains attendance, optional late names, cover, and facilities", () => {
-  const v = newForm("daily", { supervisor: "مشرف" });
+test("legacy daily brief retains attendance, optional late names, cover, and facilities", () => {
+  const v = legacyDaily({ supervisor: "مشرف" });
   Object.assign(v.attendance[0], {
     className: "٧/١",
     present: "20",
@@ -168,7 +182,7 @@ test("daily brief retains attendance, optional late names, cover, and facilities
 });
 test("legacy daily backups gain blank lateness fields without losing zero counts", () => {
   const store = emptyStore(),
-    v = newForm("daily");
+    v = legacyDaily();
   v.attendance[0].present = "0";
   delete v.attendance[0].lateCount;
   delete v.attendance[0].lateNames;

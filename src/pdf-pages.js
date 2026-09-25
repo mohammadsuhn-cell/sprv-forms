@@ -139,7 +139,7 @@ export async function renderPages(r) {
     const widths = percentages.map((p) => (contentWidth * p) / 100),
       size = options.size || 16,
       lineHeight = size * 1.8,
-      padding = 12;
+      padding = r.layout === "daily" ? 8 : 12;
     const isLabel = (i) => options.header || options.labels?.includes(i);
     const lines = cells.map((v, i) =>
       wrap(v, widths[i] - padding * 2, size, isLabel(i)),
@@ -197,10 +197,18 @@ export async function renderPages(r) {
   ];
   for (let i = 0; i < metadata.length; i += 2) {
     const pairs = metadata.slice(i, i + 2);
-    row(pairs.flat(), pairs.length === 2 ? [17, 33, 17, 33] : [17, 83], {
-      labels: pairs.map((_, j) => j * 2),
-      size: 15,
-    });
+    row(
+      pairs.flat(),
+      pairs.length === 2
+        ? r.layout === "daily"
+          ? [21, 29, 21, 29]
+          : [17, 33, 17, 33]
+        : [17, 83],
+      {
+        labels: pairs.map((_, j) => j * 2),
+        size: 15,
+      },
+    );
   }
   y += 18;
   for (const table of r.tables) {
@@ -215,6 +223,10 @@ export async function renderPages(r) {
       row(cells, weights, {
         size: 16,
         stripe: index % 2 === 1,
+        labels:
+          table.totalRow && index === table.rows.length - 1
+            ? cells.map((_, i) => i)
+            : [],
         repeat: heading,
       }),
     );

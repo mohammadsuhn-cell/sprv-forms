@@ -13,6 +13,12 @@ import {
   absenceReport,
 } from "./absence.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
+import {
+  initializeDailyBrief,
+  isLinkedDaily,
+  dailyReport,
+  validateDailySummary,
+} from "./daily-brief.js";
 export const letterhead = Object.freeze({
   ministry: "وزارة التربية",
   district: "منطقة الفروانية التعليمية",
@@ -342,6 +348,10 @@ export function newForm(kind, profile = {}, roster = null) {
     createdAt: new Date().toISOString(),
   };
   if (kind === "daily") form.decisions = "";
+  if (kind === "staffing")
+    form.grade = grades.includes(profile.grade)
+      ? profile.grade
+      : rosterGrades(roster)[0] || "";
   if (kind === "late") {
     form.grade = grades.includes(profile.grade) ? profile.grade : "";
     form.className = "";
@@ -362,7 +372,7 @@ export function newForm(kind, profile = {}, roster = null) {
     return initializeAbsence(form, roster, profile.grade, uid);
   for (const g of groups[kind]) form[g.key] = [newRow(g)];
   if (form.rosterMode === "yes") form.students = [];
-  return form;
+  return kind === "daily" ? initializeDailyBrief(form, profile, roster) : form;
 }
 export const isRowFilled = (row) =>
   Object.entries(row).some(
@@ -418,7 +428,12 @@ export function report(form) {
       ["إلى تاريخ", dateLabel(form.to)],
     );
   }
-  if (form.kind === "case") {
+  if (isLinkedDaily(form)) {
+    const brief = dailyReport(form);
+    meta.push(...brief.meta);
+    tables.push(...brief.tables);
+    sections.push(...brief.sections);
+  } else if (form.kind === "case") {
     for (const section of caseSections) {
       const lines = section.fields
         .filter((f) =>
@@ -516,6 +531,7 @@ export function report(form) {
     tables,
     sections,
     landscape: ["cases", "staffing"].includes(form.kind),
+    ...(isLinkedDaily(form) ? { layout: "daily" } : {}),
   };
 }
 export function validateForm(v) {
@@ -525,6 +541,32 @@ export function validateForm(v) {
   if (!v.supervisor?.trim())
     errors.push(["أدخل اسم المشرف.", "Enter the supervisor name."]);
   if (!v.date) errors.push(["حدد التاريخ.", "Choose a date."]);
+  if (
+    v.kind === "staffing" &&
+    v.grade !== undefined &&
+    !grades.includes(v.grade)
+  )
+    errors.push(["اختر الصف.", "Choose a grade."]);
+  if (isLinkedDaily(v)) {
+    if (!grades.includes(v.grade))
+      errors.push(["اختر الصف.", "Choose a grade."]);
+    try {
+      validateDailySummary(v.summary);
+      if (
+        !v.summary ||
+        v.summary.date !== v.date ||
+        v.summary.grade !== v.grade ||
+        v.summary.supervisor !== v.supervisor
+      )
+        throw Error("Stale daily scope");
+    } catch {
+      errors.push([
+        "حدّث الموجز من السجلات.",
+        "Update the brief from saved records.",
+      ]);
+    }
+    return errors;
+  }
   if (v.kind === "absence") {
     if (!grades.includes(v.grade))
       errors.push(["اختر الصف.", "Choose a grade."]);
@@ -662,8 +704,13 @@ export function validateStore(value) {
         }
       }
     }
+    if (isLinkedDaily(v)) validateDailySummary(v.summary);
     for (const [key, val] of Object.entries(v))
-      if (!groups[v.kind].some((g) => g.key === key) && typeof val !== "string")
+      if (
+        !(isLinkedDaily(v) && key === "summary") &&
+        !groups[v.kind].some((g) => g.key === key) &&
+        typeof val !== "string"
+      )
         throw Error("Invalid value");
   }
   if (new Set(value.saved.map((v) => v.id)).size !== value.saved.length)

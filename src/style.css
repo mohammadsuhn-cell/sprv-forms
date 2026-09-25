@@ -123,6 +123,55 @@ svg {
 .content.editing {
   padding-bottom: 130px;
 }
+.brief-update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.brief-attendance {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: center;
+  font-size: 14px;
+}
+.brief-attendance th,
+.brief-attendance td {
+  border: 1px solid var(--line);
+  padding: 10px 3px;
+  overflow-wrap: anywhere;
+}
+.brief-attendance thead,
+.brief-attendance tfoot {
+  background: #f0f1ef;
+  font-weight: 600;
+}
+.brief-counts > div,
+.brief-staff > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.brief-counts strong {
+  font-size: 19px;
+}
+.brief-staff {
+  margin: 0;
+}
+.brief-staff dd {
+  margin: 0;
+  font-weight: 600;
+}
+.brief-counts .text-button,
+.brief-staff + .text-button {
+  margin-top: 12px;
+}
 .page-heading {
   display: flex;
   align-items: center;

@@ -240,10 +240,11 @@ try {
   await button(page, "حفظ الحالة").click();
   await button(page, "النماذج").click();
   await button(page, "الموجز اليومي").click();
-  await expect(page.locator('select[aria-label="الشعبة"]:visible')).toHaveCount(
-    1,
+  await expect(page.getByLabel("الصف", { exact: true })).toHaveValue(
+    "الصف السابع",
   );
-  await page.locator('select[aria-label="الشعبة"]:visible').selectOption("٧/٣");
+  await expect(page.locator(".brief-attendance tbody tr")).toHaveCount(6);
+  assert.equal((await state(page)).drafts.daily.summary.cases, 1);
   await button(page, "الإعدادات").click();
   await download(
     page,
