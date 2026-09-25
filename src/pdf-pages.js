@@ -1,6 +1,10 @@
 import { exportStamp, canvasExportFooter } from "./export-stamp.js";
 import { renderAbsencePages } from "./absence-pages.js";
-import { printStyle as colors, columnPercentages } from "./export-style.js";
+import {
+  printStyle as colors,
+  columnPercentages,
+  reportHeader,
+} from "./export-style.js";
 
 // Draw complete lines with native Arabic shaping; never assemble separate letters.
 export async function renderPages(r) {
@@ -10,14 +14,12 @@ export async function renderPages(r) {
   ]);
   await document.fonts.ready;
   if (r.layout === "absence") return renderAbsencePages(r);
+  const stamp = r.exportStamp || exportStamp(r.supervisor);
+  const head = reportHeader(r, stamp);
   const width = r.landscape ? 1123 : 794,
     height = r.landscape ? 794 : 1123,
     margin = 44,
-    footer = canvasExportFooter(
-      r.exportStamp || exportStamp(r.supervisor),
-      width,
-      margin,
-    ),
+    footer = canvasExportFooter(stamp, width, margin),
     bottom = height - Math.max(60, footer.height + 12),
     contentWidth = width - margin * 2;
   const pages = [];
@@ -82,26 +84,46 @@ export async function renderPages(r) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, width, height);
     pages.push(canvas);
-    const top = 32,
-      half = contentWidth / 2;
-    const schoolLines = wrap(r.school || "", half - 30, 17, true);
-    const headHeight = Math.max(92, schoolLines.length * 28 + 48);
-    box(margin, top, contentWidth, headHeight);
-    ctx.fillStyle = `#${colors.ink}`;
-    ctx.fillRect(margin, top, contentWidth, 3);
-    draw(r.ministry, width - margin - 16, top + 10, 18, true);
-    draw(r.district, width - margin - 16, top + 44, 15);
-    schoolLines.forEach((line, i) =>
-      draw(line, width / 2 - 14, top + 10 + i * 28, 17, true),
-    );
-    draw("العام الدراسي: " + r.year, width / 2 - 14, top + headHeight - 34, 14);
-    y = top + headHeight;
-    box(margin, y, contentWidth, 52, colors.ink);
-    font(24, true);
+    const top = 22,
+      rightWidth = contentWidth * 0.6,
+      leftWidth = contentWidth - rightWidth;
+    let rightY = top,
+      leftY = top;
+    head.right.forEach((value, index) => {
+      const size = index === 1 ? 16 : 17;
+      for (const line of wrap(value, rightWidth - 18, size, index !== 1)) {
+        draw(line, width - margin, rightY, size, index !== 1);
+        rightY += 27;
+      }
+    });
+    head.left.forEach((value) => {
+      for (const line of wrap(value, leftWidth - 18, 14)) {
+        draw(line, margin + leftWidth - 16, leftY, 14);
+        leftY += 27;
+      }
+    });
+    y = Math.max(rightY, leftY) + 8;
+    ctx.strokeStyle = `#${colors.line}`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin, y);
+    ctx.lineTo(width - margin, y);
+    ctx.stroke();
+    font(25, true);
     ctx.textAlign = "center";
-    ctx.fillStyle = "#fff";
-    ctx.fillText(r.title, width / 2, y + 35);
-    y += 70;
+    ctx.fillStyle = `#${colors.ink}`;
+    ctx.fillText(r.title, width / 2, y + 37);
+    y += 51;
+    if (head.issued) {
+      for (const line of wrap(head.issued, contentWidth - 12, 14)) {
+        font(14);
+        ctx.textAlign = "center";
+        ctx.fillText(line, width / 2, y + 18);
+        y += 24;
+      }
+      y += 8;
+    }
+    y += 12;
     footer.draw(ctx, height, pages.length);
   };
   const ensure = (h) => {
@@ -109,8 +131,6 @@ export async function renderPages(r) {
   };
   const sectionBar = (title) => {
     box(margin, y, contentWidth, 38, colors.soft);
-    ctx.fillStyle = `#${colors.ink}`;
-    ctx.fillRect(width - margin - 4, y, 4, 38);
     draw(title, width - margin - 16, y + 3, 18, true);
     y += 38;
   };
@@ -145,7 +165,7 @@ export async function renderPages(r) {
       let right = width - margin;
       cells.forEach((_, i) => {
         const fill = options.header
-          ? colors.ink
+          ? colors.soft
           : isLabel(i)
             ? colors.soft
             : options.stripe
@@ -160,7 +180,7 @@ export async function renderPages(r) {
               y + padding - 3 + n * lineHeight,
               size,
               isLabel(i),
-              options.header ? colors.white : colors.ink,
+              colors.ink,
             );
         right -= widths[i];
       });
@@ -169,7 +189,12 @@ export async function renderPages(r) {
     }
   };
   newPage();
-  const metadata = [...r.meta, ["اسم المشرف", r.supervisor]];
+  const metadata = [
+    ...r.meta.filter(
+      ([key]) => !["التاريخ", "من تاريخ", "إلى تاريخ"].includes(key),
+    ),
+    ["اسم المشرف", r.supervisor],
+  ];
   for (let i = 0; i < metadata.length; i += 2) {
     const pairs = metadata.slice(i, i + 2);
     row(pairs.flat(), pairs.length === 2 ? [17, 33, 17, 33] : [17, 83], {
@@ -208,11 +233,21 @@ export async function renderPages(r) {
     );
     y += 18;
   }
-  ensure(82);
-  row(["اسم المشرف", r.supervisor, "التوقيع", ""], [17, 33, 17, 33], {
-    labels: [0, 2],
-    size: 16,
-    minHeight: 76,
-  });
+  const signature = wrap(
+    `اسم المشرف: ${r.supervisor}`,
+    contentWidth / 2 - 20,
+    16,
+  );
+  ensure(Math.max(76, signature.length * 28 + 16));
+  signature.forEach((line, i) =>
+    draw(line, width - margin, y + 10 + i * 28, 16, true),
+  );
+  draw(
+    "التوقيع: ................................",
+    margin + contentWidth / 2 - 20,
+    y + 10,
+    16,
+    true,
+  );
   return pages;
 }

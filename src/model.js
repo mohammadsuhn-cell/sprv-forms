@@ -506,6 +506,8 @@ export function report(form) {
     });
   return {
     ...letterhead,
+    kind: form.kind,
+    recordDate: form.date,
     title: titles[form.kind][0],
     school: form.school,
     year: form.year,

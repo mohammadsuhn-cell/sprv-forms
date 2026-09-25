@@ -64,7 +64,7 @@ assert(xml.includes("لم يُنفّذ بعد"));
 const book = new ExcelJS.Workbook();
 await book.xlsx.readFile("test-results/long-case.xlsx");
 assert.equal(
-  book.worksheets[0].getCell("E6").value,
+  book.worksheets[0].getCell("E7").value,
   "إنذار أول (لم يُنفّذ بعد)",
 );
 const values = [];
@@ -116,7 +116,8 @@ try {
     const result = await page.evaluate(
       async ({ asset, r }) => {
         const lines = [],
-          overflow = [];
+          overflow = [],
+          issued = [];
         const proto = CanvasRenderingContext2D.prototype,
           draw = proto.fillText,
           stroke = proto.strokeRect;
@@ -129,6 +130,8 @@ try {
           )
             overflow.push(String(text));
           lines.push(String(text));
+          if (String(text).includes("تاريخ ووقت إصدار الكشف:"))
+            issued.push({ text: String(text), y });
           return draw.call(this, text, x, y, ...args);
         };
         proto.strokeRect = function (x, y, w, h) {
@@ -143,6 +146,7 @@ try {
             count: pages.length,
             lines,
             overflow,
+            issued,
             first: pages[0].toDataURL(),
             last: pages.at(-1).toDataURL(),
           };
@@ -169,6 +173,19 @@ try {
       1,
       "Each page retains the same export timestamp",
     );
+    if (fixture.kind === "late") {
+      assert.equal(result.issued.length, result.count);
+      assert(result.issued.every((item) => item.y < 220));
+      assert.equal(new Set(result.issued.map((item) => item.text)).size, 1);
+      assert(
+        stamps[0].includes(
+          result.issued[0].text.replace(
+            "تاريخ ووقت إصدار الكشف:",
+            "تاريخ التصدير:",
+          ),
+        ),
+      );
+    }
     const text = result.lines.join("\n");
     for (const token of name === "long-case" ? tokens : ["L000", "L044"])
       assert(text.includes(token), token);

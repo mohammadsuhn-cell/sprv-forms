@@ -258,7 +258,7 @@ try {
     assert(sheet.headerFooter.oddFooter.includes("مشرف تجريبي"));
   }
   assert.equal(
-    wb.worksheets[0].getCell("E6").value,
+    wb.worksheets[0].getCell("E7").value,
     "إنذار أول (لم يُنفّذ بعد)",
   );
   await page.getByRole("button", { name: "النماذج", exact: true }).click();
@@ -491,6 +491,31 @@ try {
   }
   const lateBook = new ExcelJS.Workbook();
   await lateBook.xlsx.readFile("test-results/late-students.xlsx");
+  for (const sheet of lateBook.worksheets) {
+    const issued = String(sheet.getCell("A5").value).split("\n")[0];
+    assert(issued.startsWith("تاريخ ووقت إصدار الكشف:"));
+    assert(
+      sheet.headerFooter.oddFooter.includes(
+        issued.replace("تاريخ ووقت إصدار الكشف:", "تاريخ التصدير:"),
+      ),
+    );
+  }
+  const lateHeader = execFileSync(
+    "unzip",
+    ["-p", "test-results/late-students.docx", "word/header1.xml"],
+    { encoding: "utf8" },
+  );
+  const lateFooter = execFileSync(
+    "unzip",
+    ["-p", "test-results/late-students.docx", "word/footer1.xml"],
+    { encoding: "utf8" },
+  );
+  assert(lateHeader.includes("تاريخ ووقت إصدار الكشف:"));
+  const issuedTime = lateHeader.match(
+    /[٠-٩]{4}\/[٠-٩]{2}\/[٠-٩]{2} · [٠-٩]{2}:[٠-٩]{2}:[٠-٩]{2}/u,
+  )?.[0];
+  assert(issuedTime);
+  assert(lateFooter.includes(issuedTime));
   for (const text of [
     "٧/٢",
     "الصف السابع",
