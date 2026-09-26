@@ -36,6 +36,12 @@ import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
 import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
+import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
+const activationFragment = location.hash.startsWith("#activate=")
+  ? location.hash.slice(1)
+  : "";
+if (activationFragment)
+  history.replaceState(null, "", location.pathname + location.search);
 function read() {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -120,7 +126,7 @@ function OptionalPanel({ title, initialOpen = false, children }) {
 function App() {
   const [writeAllowed, setWriteAllowed] = useState(!initial.error);
   const [data, updateData] = useState(initial.data),
-    [page, setPage] = useState("home"),
+    [page, setPage] = useState(activationFragment ? "settings" : "home"),
     [kind, setKind] = useState(""),
     [message, setMessage] = useState(""),
     [storageError, setStorageError] = useState(initial.error),
@@ -137,6 +143,53 @@ function App() {
   const en = data.lang === "en",
     t = (ar, english) => (en ? english : ar),
     form = data.drafts[kind];
+  const delivery = useDelivery(data.saved, writeAllowed && !storageError);
+  const connected = delivery.connection;
+  useEffect(() => {
+    if (
+      connected &&
+      (currentData.current.profile.supervisor !== connected.supervisor.name ||
+        currentData.current.profile.grade !== connected.supervisor.grade)
+    )
+      activateProfile(connected);
+  }, [connected?.supervisor.id]);
+  const earlierForms = connected
+    ? data.saved.filter(
+        (s) =>
+          !s.syncSupervisorId &&
+          s.supervisor === connected.supervisor.name &&
+          (!s.grade || s.grade === connected.supervisor.grade),
+      )
+    : [];
+  async function activateProfile(connection) {
+    setData((d) => ({
+      ...withSupervisor(d, connection.supervisor.name),
+      profile: {
+        ...d.profile,
+        supervisor: connection.supervisor.name,
+        grade: connection.supervisor.grade,
+      },
+    }));
+  }
+  function shareEarlier() {
+    if (
+      !connected ||
+      !confirm(
+        t(
+          `إرسال ${earlierForms.length} نموذجًا محفوظًا إلى الإشراف العام؟`,
+          `Send ${earlierForms.length} earlier saved forms to general supervision?`,
+        ),
+      )
+    )
+      return;
+    const ids = new Set(earlierForms.map((s) => s.id));
+    setData((d) => ({
+      ...d,
+      saved: d.saved.map((s) =>
+        ids.has(s.id) ? { ...s, syncSupervisorId: connected.supervisor.id } : s,
+      ),
+    }));
+  }
   useEffect(() => {
     document.documentElement.lang = en ? "en" : "ar";
     document.documentElement.dir = en ? "ltr" : "rtl";
@@ -253,8 +306,8 @@ function App() {
     setDraft(refreshDailyBrief(fresh, data.saved, data.roster));
     setErrors([]);
   }
-  function check() {
-    const e = validateForm(form);
+  function check(target = form) {
+    const e = validateForm(target);
     setErrors(e.map((v) => v[en ? 1 : 0]));
     if (e.length) {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -263,8 +316,39 @@ function App() {
     return true;
   }
   function save() {
-    if (!check()) return;
-    const saved = { ...form, savedAt: new Date().toISOString() };
+    if (!delivery.ready) {
+      notify(
+        t(
+          "جارٍ قراءة بيانات الاتصال؛ أعد الحفظ بعد لحظة",
+          "Loading connection details; save again in a moment",
+        ),
+      );
+      return;
+    }
+    if (
+      connected &&
+      form.syncSupervisorId &&
+      form.syncSupervisorId !== connected.supervisor.id
+    ) {
+      notify(
+        t(
+          "هذا السجل مرتبط بمشرف آخر",
+          "This record belongs to another supervisor",
+        ),
+      );
+      return;
+    }
+    let target = connected
+      ? {
+          ...form,
+          supervisor: connected.supervisor.name,
+          syncSupervisorId: connected.supervisor.id,
+        }
+      : form;
+    if (isLinkedDaily(target) && target.supervisor !== form.supervisor)
+      target = refreshDailyBrief(target, data.saved, data.roster);
+    if (!check(target)) return;
+    const saved = { ...target, savedAt: new Date().toISOString() };
     const persisted = setData((d) => ({
       ...d,
       saved: [saved, ...d.saved.filter((s) => s.id !== form.id)],
@@ -434,6 +518,7 @@ function App() {
       lang={data.lang}
       key={key}
       field={{ key, ar, en: english, kind: type }}
+      disabled={key === "supervisor" && Boolean(connected)}
       value={form[key]}
       onChange={(v) => change(key, v)}
     />
@@ -607,6 +692,24 @@ function App() {
       <main
         className={`${page === "form" ? "content editing" : "content"}${readyFile ? " has-ready-file" : ""}`}
       >
+        {connected && (
+          <button
+            className="delivery-status"
+            onClick={() => setPage("settings")}
+          >
+            {t("الإشراف العام", "General supervision")} ·{" "}
+            {delivery.error
+              ? t("تعذّر تجهيز الإرسال", "Delivery storage unavailable")
+              : delivery.blocked
+                ? t("سجلات تحتاج مراجعة", "Records need review")
+                : delivery.pending
+                  ? t(
+                      `بانتظار الإرسال: ${delivery.pending}`,
+                      `Pending: ${delivery.pending}`,
+                    )
+                  : t("مفعل", "Activated")}
+          </button>
+        )}
         {storageError && (
           <div className="alert" role="alert">
             {storageError}
@@ -1033,6 +1136,14 @@ function App() {
         {page === "settings" && (
           <>
             <h1>{t("الإعدادات", "Settings")}</h1>
+            <DeliveryPanel
+              delivery={delivery}
+              t={t}
+              onActivated={activateProfile}
+              onShareExisting={shareEarlier}
+              existingCount={earlierForms.length}
+              initialInvitation={activationFragment}
+            />
             <section className="panel">
               {sectionTitle("بيانات النماذج", "Form details")}
               <div className="school-identity">
@@ -1047,6 +1158,7 @@ function App() {
                       key={key}
                       field={{ key, ar, en: english }}
                       value={data.profile[key]}
+                      disabled={Boolean(connected)}
                       onChange={(v) => setData((d) => withSupervisor(d, v))}
                     />
                   ),
@@ -1062,6 +1174,7 @@ function App() {
                   options: grades,
                 }}
                 value={data.profile.grade || ""}
+                disabled={Boolean(connected)}
                 onChange={(grade) =>
                   setData((d) => ({ ...d, profile: { ...d.profile, grade } }))
                 }
@@ -1186,8 +1299,12 @@ function App() {
               </div>
               <p className="settings-note">
                 {t(
-                  "المسودات والمحفوظات خاصة بهذا المتصفح. حذف بيانات المتصفح يحذفها.",
-                  "Drafts and saved forms belong to this browser. Clearing browser data removes them.",
+                  connected
+                    ? "النسخة تضم المسودات والمحفوظات والقائمة. تفعيل الاتصال لا ينتقل إلى جهاز آخر مع الملف."
+                    : "المسودات والمحفوظات خاصة بهذا المتصفح. حذف بيانات المتصفح يحذفها.",
+                  connected
+                    ? "The backup includes drafts, saved forms and roster. Connection credentials do not transfer with this file."
+                    : "Drafts and saved forms belong to this browser. Clearing browser data removes them.",
                 )}
               </p>
               <input
@@ -1272,6 +1389,7 @@ function App() {
     </>
   );
   function SavedRow({ item, remove = false }) {
+    const receipt = delivery.records.find((r) => r.formId === item.id);
     return (
       <div className="saved-row">
         <button
@@ -1310,6 +1428,29 @@ function App() {
                 </span>
               )}
             </span>
+            {item.syncSupervisorId && (
+              <span className="record-delivery">
+                {receipt?.blocked
+                  ? t("تحتاج مراجعة", "Needs review")
+                  : receipt?.pending ||
+                      !receipt?.receipt ||
+                      receipt.savedAt !== item.savedAt
+                    ? t("بانتظار الإرسال", "Awaiting delivery")
+                    : t("تم الاستلام", "Received")}
+                {receipt?.receipt &&
+                  !receipt.pending &&
+                  receipt.savedAt === item.savedAt && (
+                    <time dateTime={receipt.receipt.receivedAt}>
+                      {" "}
+                      ·{" "}
+                      {new Date(receipt.receipt.receivedAt).toLocaleString(
+                        en ? "en-GB" : "ar-KW",
+                        { timeZone: "Asia/Kuwait" },
+                      )}
+                    </time>
+                  )}
+              </span>
+            )}
           </div>
         </button>
         {remove && (
@@ -1318,7 +1459,14 @@ function App() {
             aria-label={t("حذف النسخة", "Delete saved copy")}
             onClick={() => {
               if (
-                confirm(t("حذف النسخة المحفوظة؟", "Delete this saved copy?"))
+                confirm(
+                  item.syncSupervisorId
+                    ? t(
+                        "حذف النسخة من هذا الجهاز؟ تبقى النسخة الواردة وسجل الإرسال لدى الإشراف العام.",
+                        "Delete this device copy? The general supervisor retains received records and pending delivery continues.",
+                      )
+                    : t("حذف النسخة المحفوظة؟", "Delete this saved copy?"),
+                )
               ) {
                 const persisted = setData((d) => ({
                   ...d,

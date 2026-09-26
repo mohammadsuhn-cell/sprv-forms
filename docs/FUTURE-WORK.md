@@ -11,4 +11,4 @@ Recorded 25 September 2026. The user explicitly deferred these features; the cur
 
 Keep these features mostly automatic or based on remembered selections. Do not add every field to every form. Their future design must account for local device storage and the absence of verified accounts or shared registration today.
 
-Automatic transfer to the local app, cross-supervisor oversight and the general-supervisor role remain separate future work, as recorded in the launch checklist.
+Updated 26 September 2026: automatic saved-form delivery and a separate local incoming-records view are implemented as an opt-in pilot. Internet operation still requires an authenticated receiver address and a mobile-data trial. Roster/settings synchronization and filtered per-supervisor recovery JSON remain future work. See `CONNECTION.md`.

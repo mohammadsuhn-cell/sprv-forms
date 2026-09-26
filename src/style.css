@@ -1191,3 +1191,29 @@ h2 {
   cursor: pointer;
   margin-bottom: 12px;
 }
+/* Delivery controls use the same restrained visual language as the forms. */
+.delivery-status {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: 1px solid #d7d9d5;
+  background: #f3f4f1;
+  color: #353a35;
+  padding: 10px 14px;
+  margin-block: 0 16px;
+  border-radius: 4px;
+  font: inherit;
+}
+.delivery-panel input {
+  width: 100%;
+  min-width: 0;
+}
+.delivery-panel p {
+  overflow-wrap: anywhere;
+}
+.record-delivery {
+  display: block;
+  color: #4d6152;
+  font-size: 14px;
+  margin-top: 5px;
+}

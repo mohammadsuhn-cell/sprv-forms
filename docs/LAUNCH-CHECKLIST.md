@@ -2,6 +2,8 @@
 
 Prepared 24 September 2026; updated 25 September 2026. Completed implementation items are marked below. Remaining items cover physical phone trials and school handover.
 
+26 September update: the optional receiver connection is now implemented for a pilot; the earlier unsynchronized launch boundary below is historical. Unactivated browsers still work locally. Before enabling colleagues, establish the laptop receiver's HTTPS address and trial activation, saved-form receipt, offline retry and revocation over actual mobile data. Full roster/settings synchronization and selective supervisor recovery are still deferred. See `CONNECTION.md`.
+
 ## Current working baseline
 
 - Five Arabic forms: case details, daily brief, teachers/substitutes, late students, daily absence sheet (PDF).
@@ -33,14 +35,14 @@ Prepared 24 September 2026; updated 25 September 2026. Completed implementation 
 
 - [ ] Publish the tested build and verify the live link/version.
 - [ ] Prepare a short Arabic instruction card and QR code for the forms URL only; keep rosters separate.
-- [ ] Explain that records are local to the device/browser, there is no automatic submission/sync yet, and regular exports/backups are needed.
+- [ ] Explain whether each browser is activated: drafts stay local; activated browsers queue saved forms for the general supervisor and show receipt status. Keep JSON backups for rosters, settings, drafts and pending records until full workspace recovery exists.
 - [ ] Agree with the headmaster on the report recipient and approved sharing destination, taking the no-cloud requirement into account.
 - [ ] Distribute the grade roster privately through the agreed method and assist with the one-time setup.
 - [ ] Preserve a known-good release for rollback and record a support contact for the first week.
 
 ## Release boundary
 
-Synchronization to localhost, a general-supervisor dashboard, school hosting and a shared database are deferred. No additional forms are required for this release. If some rosters are not supplied by handover, existing manual-entry forms remain usable; the daily absence checklist requires a roster.
+The optional laptop receiver and general-supervisor inbox are a separate pilot requiring an HTTPS tunnel and device activation. Continuous school hosting, roster/settings synchronization and selective supervisor recovery remain deferred. No additional forms are required for this release. If some rosters are not supplied by handover, existing manual-entry forms remain usable; the daily absence checklist requires a roster.
 
 ## Inputs needed
 
