@@ -2,7 +2,7 @@
 
 Prepared 24 September 2026; updated 25 September 2026. Completed implementation items are marked below. Remaining items cover physical phone trials and school handover.
 
-26 September update: the optional receiver connection is now implemented for a pilot; the earlier unsynchronized launch boundary below is historical. Unactivated browsers still work locally. Before enabling colleagues, establish the laptop receiver's HTTPS address and trial activation, saved-form receipt, offline retry and revocation over actual mobile data. Full roster/settings synchronization and selective supervisor recovery are still deferred. See `CONNECTION.md`.
+26 September update: the optional receiver connection is implemented and public HTTPS is verified; the earlier unsynchronized launch boundary below is historical. The user activated a physical phone through an inbox-generated link, and one saved late-students form reached the laptop with a receipt and a validated local backup. Unactivated browsers still work locally. Before enabling colleagues, confirm carrier-data-only delivery, physical-phone offline retry and revocation. Full roster/settings synchronization and selective supervisor recovery are still deferred. See `CONNECTION.md`.
 
 ## Current working baseline
 
