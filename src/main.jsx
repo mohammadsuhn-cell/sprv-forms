@@ -37,6 +37,7 @@ import { FileActions } from "./file-actions.jsx";
 import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
+import { queueBackup } from "./delivery.js";
 const activationFragment = location.hash.startsWith("#activate=")
   ? location.hash.slice(1)
   : "";
@@ -409,23 +410,42 @@ function App() {
         );
     }
   }
-  function backup() {
+  async function backup() {
+    let contents, filename;
     try {
-      const contents = !writeAllowed
+      contents = !writeAllowed
         ? localStorage.getItem(storageKey) ||
           JSON.stringify(currentData.current)
         : JSON.stringify(currentData.current, null, 2);
-      download(
-        new Blob([contents], { type: "application/json" }),
-        `supervision-backup-${today()}.json`,
-      );
-      return true;
+      filename = `supervision-backup-${today()}.json`;
+      download(new Blob([contents], { type: "application/json" }), filename);
     } catch {
       notify(
         t("تعذّر تنزيل النسخة الاحتياطية", "Could not download the backup"),
       );
       return false;
     }
+    try {
+      const queued = await queueBackup(contents, filename);
+      if (queued) {
+        notify(
+          t(
+            "تم تنزيل النسخة وإضافتها لقائمة الإرسال إلى الإشراف العام",
+            "Backup downloaded and queued for general supervision",
+          ),
+        );
+        await delivery.refresh();
+        void delivery.tick();
+      }
+    } catch {
+      notify(
+        t(
+          "تم تنزيل النسخة، لكن تعذّر تجهيز إرسالها. احتفظ بالملف وأعد المحاولة من الإعدادات.",
+          "Backup downloaded, but could not be queued. Keep the file and retry from Settings.",
+        ),
+      );
+    }
+    return true;
   }
   async function restore(event) {
     const file = event.target.files?.[0];
@@ -692,7 +712,7 @@ function App() {
       <main
         className={`${page === "form" ? "content editing" : "content"}${readyFile ? " has-ready-file" : ""}`}
       >
-        {connected && (
+        {connected && page === "settings" && (
           <button
             className="delivery-status"
             onClick={() => setPage("settings")}
@@ -1264,7 +1284,7 @@ function App() {
               {!writeAllowed && (
                 <button
                   className="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (
                       confirm(
                         t(
@@ -1273,7 +1293,7 @@ function App() {
                         ),
                       )
                     ) {
-                      if (backup() && setData(emptyStore(), true)) {
+                      if ((await backup()) && setData(emptyStore(), true)) {
                         setWriteAllowed(true);
                       }
                     }
@@ -1287,7 +1307,12 @@ function App() {
               )}
               <div className="backup-buttons">
                 <button className="button" onClick={backup}>
-                  {t("تنزيل نسخة احتياطية", "Download backup")}
+                  {connected
+                    ? t(
+                        "تنزيل النسخة وإرسالها للإشراف العام",
+                        "Download & send backup",
+                      )
+                    : t("تنزيل نسخة احتياطية", "Download backup")}
                 </button>
                 <button
                   className="button"
@@ -1300,10 +1325,10 @@ function App() {
               <p className="settings-note">
                 {t(
                   connected
-                    ? "النسخة تضم المسودات والمحفوظات والقائمة. تفعيل الاتصال لا ينتقل إلى جهاز آخر مع الملف."
+                    ? "عند التنزيل تُرسل نسخة كاملة إلى وارد الإشراف العام: المسودات والمحفوظات وقائمة الطلبة والإعدادات. عند انقطاع الاتصال تبقى بانتظار الإرسال. تفعيل الجهاز لا ينتقل مع الملف."
                     : "المسودات والمحفوظات خاصة بهذا المتصفح. حذف بيانات المتصفح يحذفها.",
                   connected
-                    ? "The backup includes drafts, saved forms and roster. Connection credentials do not transfer with this file."
+                    ? "Downloading also sends a full copy to general supervision: drafts, saved forms, roster and settings. Offline copies wait for delivery. Device activation is not included."
                     : "Drafts and saved forms belong to this browser. Clearing browser data removes them.",
                 )}
               </p>

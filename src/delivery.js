@@ -1,6 +1,6 @@
 // Device credentials and pending submissions are deliberately separate from portable JSON backups.
 // The private signing key is non-exportable and never placed in localStorage or an activation URL.
-import { storageKey } from "./model.js";
+import { storageKey, validateStore } from "./model.js";
 const databaseName = "sprv-delivery-v1";
 let database;
 const request = (r) =>
@@ -178,10 +178,36 @@ function jobFor(row, c) {
       protocol: 1,
       serverId: c.serverId,
       deviceId: c.deviceId,
-      revision: (row.receipt?.revision || 0) + 1,
-      form: row.form,
+      ...(row.backup
+        ? { backup: row.backup }
+        : { revision: (row.receipt?.revision || 0) + 1, form: row.form }),
     }),
   };
+}
+// Only an explicit backup download creates a job. Draft changes never call this.
+export async function queueBackup(contents, filename) {
+  const connection = await readSetting("connection");
+  if (!connection) return null;
+  if (new Blob([contents]).size > 15000000)
+    throw Error("النسخة أكبر من حد الإرسال (١٥ ميغابايت)");
+  validateStore(JSON.parse(contents));
+  const backup = {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    filename,
+    contents,
+  };
+  const row = {
+    id: connection.serverId + ":backup:" + backup.id,
+    serverId: connection.serverId,
+    deviceId: connection.deviceId,
+    backup,
+    fingerprint: backup.id,
+    updatedAt: backup.createdAt,
+  };
+  row.job = jobFor(row, connection);
+  await transaction("records", "readwrite", (s) => request(s.put(row)));
+  return backup.id;
 }
 export async function reconcileSaved() {
   const connection = await readSetting("connection");
@@ -249,17 +275,23 @@ async function deliverOnce() {
           ),
         ),
       );
-      const receipt = await post(connection.endpoint, "/v1/records", {
-        message: job.message,
-        signature,
-      });
+      const receipt = await post(
+        connection.endpoint,
+        row.backup ? "/v1/backups" : "/v1/records",
+        {
+          message: job.message,
+          signature,
+        },
+      );
       const sent = JSON.parse(job.message);
       if (
         receipt.protocol !== 1 ||
         receipt.serverId !== connection.serverId ||
         receipt.deviceId !== connection.deviceId ||
-        receipt.formId !== sent.form.id ||
-        receipt.revision !== sent.revision ||
+        (sent.backup
+          ? receipt.backupId !== sent.backup.id
+          : receipt.formId !== sent.form.id ||
+            receipt.revision !== sent.revision) ||
         !receipt.receiptId ||
         !Number.isFinite(Date.parse(receipt.receivedAt))
       )
@@ -274,6 +306,8 @@ async function deliverOnce() {
             : jobFor(current, connection);
         current.error = "";
         current.errorStatus = null;
+        // Keep the receipt after delivery, without a second full workspace copy on the phone.
+        if (current.backup && !current.job) delete current.backup.contents;
         await request(s.put(current));
       });
     } catch (error) {
@@ -309,7 +343,13 @@ export async function retryDelivery() {
 export async function deliveryState() {
   const connection = await readSetting("connection");
   if (!connection)
-    return { connection: null, records: [], pending: 0, blocked: 0 };
+    return {
+      connection: null,
+      records: [],
+      backups: [],
+      pending: 0,
+      blocked: 0,
+    };
   const rows = (
     await transaction("records", "readonly", (s) => request(s.getAll()))
   ).filter((r) => sameConnection(r, connection));
@@ -320,15 +360,27 @@ export async function deliveryState() {
       (r) =>
         r.job && r.errorStatus && r.errorStatus < 500 && r.errorStatus !== 429,
     ).length,
-    records: rows.map((r) => ({
-      formId: r.form.id,
-      savedAt: r.form.savedAt,
-      pending: Boolean(r.job),
-      receipt: r.receipt,
-      error: r.error || "",
-      blocked: Boolean(
-        r.errorStatus && r.errorStatus < 500 && r.errorStatus !== 429,
-      ),
-    })),
+    backups: rows
+      .filter((r) => r.backup)
+      .map((r) => ({
+        id: r.backup.id,
+        createdAt: r.backup.createdAt,
+        pending: Boolean(r.job),
+        receipt: r.receipt,
+        error: r.error || "",
+      }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    records: rows
+      .filter((r) => r.form)
+      .map((r) => ({
+        formId: r.form.id,
+        savedAt: r.form.savedAt,
+        pending: Boolean(r.job),
+        receipt: r.receipt,
+        error: r.error || "",
+        blocked: Boolean(
+          r.errorStatus && r.errorStatus < 500 && r.errorStatus !== 429,
+        ),
+      })),
   };
 }

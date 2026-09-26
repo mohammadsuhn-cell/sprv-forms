@@ -13,6 +13,7 @@ export function useDelivery(saved, enabled) {
   const [state, setState] = useState({
     connection: null,
     records: [],
+    backups: [],
     pending: 0,
     blocked: 0,
     ready: false,
@@ -142,6 +143,15 @@ export function DeliveryPanel({
                 {r.error}
               </p>
             ))}
+          {(delivery.backups || []).slice(0, 5).map((backup) => (
+            <p className="backup-delivery" role="status" key={backup.id}>
+              {t("نسخة احتياطية", "Backup")} ·{" "}
+              {new Date(backup.createdAt).toLocaleString()} ·{" "}
+              {backup.pending
+                ? backup.error || t("بانتظار الإرسال", "Awaiting delivery")
+                : t("تم الاستلام", "Received")}
+            </p>
+          ))}
         </>
       ) : (
         <>
@@ -180,8 +190,8 @@ export function DeliveryPanel({
               </p>
               <p>
                 {t(
-                  "تُرسل النماذج بعد حفظها إلى الإشراف العام. تبقى المسودات على جهازك.",
-                  "Saved forms are sent to general supervision. Drafts stay on your device.",
+                  "تُرسل النماذج بعد حفظها إلى الإشراف العام. المسودات لا تُرسل أثناء التحرير؛ تُضمّن مع القائمة والإعدادات عند تنزيل نسخة احتياطية وإرسالها.",
+                  "Saved forms go to general supervision. Draft edits stay local; downloading and sending a backup includes drafts, roster and settings.",
                 )}
               </p>
               <button
