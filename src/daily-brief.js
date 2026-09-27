@@ -51,7 +51,10 @@ export function buildDailySummary(form, saved, roster) {
   const scoped = [...saved]
     .filter(
       (s) =>
-        s.date === form.date && text(s.supervisor) === text(form.supervisor),
+        s.date === form.date &&
+        (s.syncSupervisorId && form.syncSupervisorId
+          ? s.syncSupervisorId === form.syncSupervisorId
+          : text(s.supervisor) === text(form.supervisor)),
     )
     .sort(latestFirst);
   const seen = new Set();

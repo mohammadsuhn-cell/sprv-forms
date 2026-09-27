@@ -344,6 +344,9 @@ export function newForm(kind, profile = {}, roster = null) {
     school: schoolIdentity.school,
     year: schoolIdentity.year,
     supervisor: profile.supervisor || "",
+    ...(profile.syncSupervisorId
+      ? { syncSupervisorId: profile.syncSupervisorId }
+      : {}),
     notes: "",
     createdAt: new Date().toISOString(),
   };

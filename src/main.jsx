@@ -149,7 +149,8 @@ function App() {
   useEffect(() => {
     if (
       connected &&
-      (currentData.current.profile.supervisor !== connected.supervisor.name ||
+      (currentData.current.profile.syncSupervisorId !==
+        connected.supervisor.id ||
         currentData.current.profile.grade !== connected.supervisor.grade)
     )
       activateProfile(connected);
@@ -163,14 +164,22 @@ function App() {
       )
     : [];
   async function activateProfile(connection) {
-    setData((d) => ({
-      ...withSupervisor(d, connection.supervisor.name),
-      profile: {
-        ...d.profile,
-        supervisor: connection.supervisor.name,
-        grade: connection.supervisor.grade,
-      },
-    }));
+    setData((d) => {
+      const next = withSupervisor(
+        d,
+        d.profile.syncSupervisorId === connection.supervisor.id
+          ? d.profile.supervisor
+          : connection.supervisor.name,
+      );
+      return {
+        ...next,
+        profile: {
+          ...next.profile,
+          syncSupervisorId: connection.supervisor.id,
+          grade: connection.supervisor.grade,
+        },
+      };
+    });
   }
   function shareEarlier() {
     if (
@@ -275,7 +284,11 @@ function App() {
   function openKind(k) {
     setKind(k);
     const existing = data.drafts[k];
-    const draft = existing || newForm(k, data.profile, data.roster);
+    const base = existing || newForm(k, data.profile, data.roster);
+    const draft =
+      connected && !base.savedAt && !base.syncSupervisorId
+        ? { ...base, syncSupervisorId: connected.supervisor.id }
+        : base;
     const prepared =
       k === "case"
         ? prepareCaseDraft(draft)
@@ -342,7 +355,7 @@ function App() {
     let target = connected
       ? {
           ...form,
-          supervisor: connected.supervisor.name,
+          supervisor: data.profile.supervisor.trim(),
           syncSupervisorId: connected.supervisor.id,
         }
       : form;
@@ -1178,7 +1191,6 @@ function App() {
                       key={key}
                       field={{ key, ar, en: english }}
                       value={data.profile[key]}
-                      disabled={Boolean(connected)}
                       onChange={(v) => setData((d) => withSupervisor(d, v))}
                     />
                   ),

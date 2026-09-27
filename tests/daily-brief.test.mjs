@@ -59,6 +59,26 @@ test("daily brief aggregates class attendance, unique late students, cases and a
   assert.deepEqual(f.store, original);
 });
 
+test("renaming a connected supervisor retains their daily sources by stable identity", () => {
+  const f = dailyFixture();
+  f.store.profile.syncSupervisorId = "supervisor-1";
+  f.store.saved = f.store.saved.map((s) => ({
+    ...s,
+    syncSupervisorId: "supervisor-1",
+  }));
+  f.store.profile.supervisor = "الاسم المعدل";
+  const v = brief(f);
+  assert.equal(buildDailySummary(v, f.store.saved, f.store.roster).cases, 2);
+  assert.equal(
+    buildDailySummary(
+      v,
+      f.store.saved.map((s) => ({ ...s, syncSupervisorId: "other" })),
+      f.store.roster,
+    ).cases,
+    0,
+  );
+});
+
 test("date, supervisor and grade isolate sources; registers and drafts do not add cases", () => {
   const f = dailyFixture(),
     v = brief(f);
