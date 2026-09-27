@@ -283,6 +283,7 @@ export const caseSections = [
     fields: [
       fields.student,
       fields.className,
+      f("reportingTeacher", "المعلم المبلّغ", "Reporting teacher"),
       f("reference", "رقم الحالة", "Reference"),
       f("location", "مكان الواقعة", "Location", "select", locations),
       fields.type,

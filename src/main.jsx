@@ -913,6 +913,7 @@ function App() {
                               ![
                                 "student",
                                 "className",
+                                "reportingTeacher",
                                 "type",
                                 "description",
                                 "location",

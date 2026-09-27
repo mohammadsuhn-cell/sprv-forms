@@ -51,6 +51,18 @@ export function CaseEditor({ form, roster, grade, lang, onChange, Field }) {
               onChange={(value) => onChange({ ...form, [f.key]: value })}
             />
           ))}
+          <Field
+            lang={lang}
+            field={{
+              ...field("reportingTeacher"),
+              ar: "المعلم المبلّغ (اختياري)",
+              en: "Reporting teacher (optional)",
+            }}
+            value={form.reportingTeacher || ""}
+            onChange={(reportingTeacher) =>
+              onChange({ ...form, reportingTeacher })
+            }
+          />
         </div>
       </section>
       <section className="panel">

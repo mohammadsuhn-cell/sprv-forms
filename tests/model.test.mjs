@@ -24,6 +24,34 @@ function legacyDaily(profile = {}) {
     delete form[key];
   return form;
 }
+test("optional reporting teacher survives save/restore and is included in case reports", () => {
+  const form = newForm("case", { supervisor: "مشرف تجريبي" });
+  form.student = "طالب تجريبي";
+  form.className = "٧/١";
+  assert.equal(form.reportingTeacher, "");
+  assert.deepEqual(validateForm(form), []);
+  assert(
+    !report(form)
+      .sections.flatMap((s) => s.lines)
+      .some(([label]) => label === "المعلم المبلّغ"),
+  );
+  form.reportingTeacher = "معلم تجريبي";
+  const store = emptyStore();
+  store.saved = [form];
+  const restored = validateStore(JSON.parse(JSON.stringify(store))).saved[0];
+  assert.equal(restored.reportingTeacher, form.reportingTeacher);
+  assert(
+    report(restored)
+      .sections.flatMap((s) => s.lines)
+      .some(
+        ([label, value]) =>
+          label === "المعلم المبلّغ" && value === form.reportingTeacher,
+      ),
+  );
+  delete form.reportingTeacher;
+  assert.doesNotThrow(() => validateStore(store));
+});
+
 test("new forms retain profile, start blank, and isolate copies", () => {
   for (const kind of ["cases", "case", "daily", "staffing"]) {
     const profile = {
