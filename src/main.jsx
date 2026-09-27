@@ -1,3 +1,4 @@
+import { caseStudentNames, caseClassNames } from "./case-students.js";
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -1452,12 +1453,17 @@ function App() {
           }}
         >
           <div>
-            <strong>{item.student || titles[item.kind][en ? 1 : 0]}</strong>
+            <strong>
+              {(item.kind === "case" ? caseStudentNames(item) : item.student) ||
+                titles[item.kind][en ? 1 : 0]}
+            </strong>
             <span>
               {dateLabel(item.date)} ·{" "}
               {(["absence", "daily", "staffing"].includes(item.kind)
                 ? item.grade
-                : item.className) || titles[item.kind][en ? 1 : 0]}
+                : item.kind === "case"
+                  ? caseClassNames(item)
+                  : item.className) || titles[item.kind][en ? 1 : 0]}
               {item.due && (
                 <span>
                   {t("المتابعة: ", "Follow-up: ")}

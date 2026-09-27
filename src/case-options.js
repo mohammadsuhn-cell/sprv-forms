@@ -1,3 +1,4 @@
+import { caseParticipants } from "./case-students.js";
 // Neutral descriptions built only from the supervisor's explicit selections.
 export const incidentGroups = [
   {
@@ -385,6 +386,9 @@ export function composeCaseDescription(form) {
   );
   let sentence =
     detailedWording[form.type]?.[detailIndex] || wording[form.type];
+  const multiple = caseParticipants(form).length > 1;
+  if (multiple)
+    sentence = `سُجّلت واقعة «${form.type}» تتعلق بالطلبة المذكورين`;
   if (form.period) {
     if (sentence.includes("الحصة"))
       sentence = sentence.replace("الحصة", `الحصة ${form.period}`);
@@ -407,10 +411,20 @@ export function composeCaseDescription(form) {
       "مصدر آخر": "بحسب المعلومات الواردة، ",
     }[form.source] || "";
   const parts = [`${prefix}${sentence}.`];
+  if (multiple && form.incidentDetail)
+    parts.push(`التفصيل المسجل: ${form.incidentDetail}.`);
   if (form.recurrence === "أول مرة مسجلة")
-    parts.push("هذه أول مرة تُسجّل فيها الواقعة للطالب.");
+    parts.push(
+      multiple
+        ? "هذه أول مرة تُسجّل فيها الواقعة للطلبة المذكورين."
+        : "هذه أول مرة تُسجّل فيها الواقعة للطالب.",
+    );
   if (form.recurrence === "تكررت سابقًا")
-    parts.push("سبق تسجيل الواقعة للطالب.");
+    parts.push(
+      multiple
+        ? "سبق تسجيل الواقعة للطلبة المذكورين."
+        : "سبق تسجيل الواقعة للطالب.",
+    );
   if (form.recurrence === "تكررت اليوم")
     parts.push("تكررت الواقعة خلال اليوم نفسه.");
   return withNotes(parts.join(" "), form.incidentNotes);

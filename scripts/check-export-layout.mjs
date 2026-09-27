@@ -5,6 +5,7 @@ import fs from "node:fs";
 import ExcelJS from "exceljs";
 import { newForm, newRow, groups, report } from "../src/model.js";
 import { wordBlob, excelBlob } from "../src/exports.js";
+import { withCaseParticipants } from "../src/case-students.js";
 
 // Synthetic fixtures only. Exercise long bordered rows, continuation headers and native files.
 const long = newForm("case", { supervisor: "مشرف تجريبي" });
@@ -23,6 +24,19 @@ long.description = tokens
 long.action = "إنذار أول";
 long.actionState = "مخطط للتنفيذ";
 long.outcome = "نهاية السجل المحفوظ";
+const groupCase = withCaseParticipants(
+  {
+    ...long,
+    description: "واقعة مشتركة تجريبية",
+    reportingTeacher: "معلم بلاغ تجريبي",
+  },
+  Array.from({ length: 35 }, (_, i) => ({
+    id: `group-${i}`,
+    student: `طالب مجموعة تجريبي G${String(i).padStart(3, "0")}`,
+    className: `٧/${"١٢٣٤٥٦"[i % 6]}`,
+    actionMode: "shared",
+  })),
+);
 const late = newForm("late", { supervisor: "مشرف تجريبي" });
 late.grade = "الصف السابع";
 late.className = "٧/٢";
@@ -42,6 +56,7 @@ const original = JSON.stringify([long, late]);
 fs.mkdirSync("test-results", { recursive: true });
 for (const [name, fixture] of [
   ["long-case", long],
+  ["group-case", groupCase],
   ["long-late", late],
 ]) {
   fs.writeFileSync(
@@ -68,6 +83,16 @@ assert.equal(
   "إنذار أول (لم يُنفّذ بعد)",
 );
 const values = [];
+const groupBook = new ExcelJS.Workbook();
+await groupBook.xlsx.readFile("test-results/group-case.xlsx");
+const groupText = JSON.stringify(groupBook.worksheets[0].getSheetValues());
+for (let i = 0; i < 35; i++)
+  assert(groupText.includes(`G${String(i).padStart(3, "0")}`));
+for (const sheet of groupBook.worksheets)
+  sheet.eachRow((row) =>
+    assert(row.height <= 409, `Group case Excel row clipped: ${row.number}`),
+  );
+assert(groupBook.worksheets.every((s) => s.views[0].rightToLeft));
 book
   .getWorksheet("تفاصيل")
   .eachRow((r) => values.push(String(r.getCell(2).value || "")));
@@ -110,6 +135,7 @@ try {
     .find((name) => name.startsWith("pdf-pages-") && name.endsWith(".js"));
   for (const [name, fixture] of [
     ["long-case", long],
+    ["group-case", groupCase],
     ["long-late", late],
     ["long-roster-late", rosterLate],
   ]) {
@@ -187,12 +213,21 @@ try {
       );
     }
     const text = result.lines.join("\n");
-    for (const token of name === "long-case" ? tokens : ["L000", "L044"])
+    for (const token of name === "long-case"
+      ? tokens
+      : name === "group-case"
+        ? groupCase.participants.map((s) => s.student.match(/G\d+/)[0])
+        : ["L000", "L044"])
       assert(text.includes(token), token);
     assert(
       result.lines.filter(
         (line) =>
-          line === (name === "long-case" ? "بيانات الحالة" : "أسماء الطلبة"),
+          line ===
+          (name === "long-case"
+            ? "بيانات الحالة"
+            : name === "group-case"
+              ? "الطلبة المعنيون (٣٥)"
+              : "أسماء الطلبة"),
       ).length > 1,
       "Continuation pages repeat the section heading",
     );

@@ -1,5 +1,6 @@
 import { absenceSummary, validateAbsence } from "./absence.js";
 import { rosterClasses, rosterGrades } from "./roster.js";
+import { caseParticipants } from "./case-students.js";
 
 const gradeNames = ["الصف السادس", "الصف السابع", "الصف الثامن", "الصف التاسع"];
 const text = (value) =>
@@ -119,7 +120,10 @@ export function buildDailySummary(form, saved, roster) {
   // A register is an export of cases, so it must not count the cases again.
   const cases = records.filter(
     (s) =>
-      s.kind === "case" && text(s.student) && inGrade(s.className, form.grade),
+      s.kind === "case" &&
+      caseParticipants(s).some(
+        (p) => text(p.student) && inGrade(p.className, form.grade),
+      ),
   ).length;
   const staffForms = records.filter(
     (s) =>

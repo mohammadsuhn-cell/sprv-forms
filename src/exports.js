@@ -1,6 +1,6 @@
 import { actionText } from "./case-options.js";
 import { exportStamp } from "./export-stamp.js";
-import { report, withSchoolIdentity } from "./model.js";
+import { report, withSchoolIdentity, caseRegister } from "./model.js";
 import {
   printStyle as colors,
   columnPercentages,
@@ -460,6 +460,58 @@ function excelHeader(sheet, r, stamp, title = r.title) {
     .filter(Boolean)
     .join("\n");
 }
+// Continue large group cases on bounded rows, keeping each student's name,
+// class and action together. Only the first row carries the incident date.
+function excelCaseRows(record) {
+  const names = String(record.student || "").split("\n");
+  const classes = String(record.className || "").split("\n");
+  const actions = actionText(record.action, record.actionState).split("\n");
+  const rows = [];
+  let row = [record.date, "", "", record.type, "", record.due].map((v) =>
+    String(v || ""),
+  );
+  const lines = (value, width) =>
+    value
+      .split("\n")
+      .reduce(
+        (n, line) =>
+          n +
+          Math.max(
+            1,
+            Math.ceil(line.length / Math.max(10, (width - 3) * 0.65)),
+          ),
+        0,
+      );
+  names.forEach((name, index) => {
+    const parts = [
+      name,
+      classes[index] || "",
+      actions.length === names.length
+        ? actions[index]
+        : index === 0
+          ? actions.join("\n")
+          : "",
+    ];
+    const append = (base) =>
+      base.map((value, col) => {
+        const part = parts[[1, 2, 4].indexOf(col)];
+        return part ? [value, part].filter(Boolean).join("\n") : value;
+      });
+    const next = append(row);
+    if (
+      row[1] &&
+      next.some(
+        (value, col) => lines(value, [16, 32, 12, 28, 32, 18][col]) > 14,
+      )
+    ) {
+      rows.push(row);
+      row = append(["تابع", "", "", "", "", ""]);
+    } else row = next;
+  });
+  rows.push(row);
+  return rows;
+}
+
 export async function excelBlob(form) {
   const stamp = exportStamp(form.supervisor);
   form = withSchoolIdentity(form);
@@ -483,7 +535,8 @@ export async function excelBlob(form) {
   if (["case", "cases"].includes(form.kind)) {
     const sheet = addSheet("الحالات", [16, 32, 12, 28, 32, 18], true);
     excelHeader(sheet, r, stamp, "سجل الحالات والمتابعة");
-    const records = form.kind === "case" ? [form] : form.rows;
+    const records =
+      form.kind === "case" ? caseRegister([form]).rows : form.rows;
     sheet.addTable({
       name: "Cases",
       ref: "A6",
@@ -497,16 +550,7 @@ export async function excelBlob(form) {
         "الإجراء المتخذ",
         "موعد المتابعة",
       ].map((name) => ({ name })),
-      rows: records.map((v) =>
-        [
-          v.date,
-          v.student,
-          v.className,
-          v.type,
-          actionText(v.action, v.actionState),
-          v.due,
-        ].map((v) => String(v || "")),
-      ),
+      rows: records.flatMap(excelCaseRows),
     });
     if (form.kind === "case") {
       const detail = addSheet("تفاصيل", [26, 65], false);

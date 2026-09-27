@@ -6,7 +6,15 @@ import {
   actionText,
   caseDescription,
   hasManualDescription,
+  isPendingAction,
+  noAction,
 } from "./case-options.js";
+import {
+  caseParticipants,
+  participantAction,
+  validateParticipants,
+  duplicateCaseStudent,
+} from "./case-students.js";
 import {
   initializeAbsence,
   validateAbsence,
@@ -438,8 +446,28 @@ export function report(form) {
     tables.push(...brief.tables);
     sections.push(...brief.sections);
   } else if (form.kind === "case") {
+    const students = caseParticipants(form);
+    const individual = students.some((s) => s.actionMode === "individual");
+    if (students.length > 1 || individual) {
+      sections.push({
+        title: `الطلبة المعنيون (${arDigits(students.length)})`,
+        lines: students.map((s, index) => {
+          const action = participantAction(form, s);
+          return [
+            `الطالب ${arDigits(index + 1)}`,
+            [s.student, s.className].filter(Boolean).join(" · ") +
+              `\nالإجراء: ${actionText(action.action, action.actionState) || "لم يُسجّل"}`,
+          ];
+        }),
+      });
+    }
     for (const section of caseSections) {
       const lines = section.fields
+        .filter(
+          (f) =>
+            !(students.length > 1 || individual) ||
+            !["student", "className"].includes(f.key),
+        )
         .filter((f) =>
           (f.key === "description"
             ? caseDescription(form)
@@ -466,7 +494,14 @@ export function report(form) {
                   ? actionText(form[f.key])
                   : form[f.key],
         ]);
-      if (lines.length) sections.push({ title: section.ar, lines });
+      if (lines.length)
+        sections.push({
+          title:
+            individual && section.fields.some((f) => f.key === "action")
+              ? "الإجراء المشترك"
+              : section.ar,
+          lines,
+        });
     }
   } else
     for (const group of groups[form.kind]) {
@@ -576,8 +611,56 @@ export function validateForm(v) {
       errors.push(["اختر الصف.", "Choose a grade."]);
     return [...errors, ...validateAbsence(v, classesForGrade(v.grade))];
   }
-  if (v.kind === "case" && !v.student?.trim())
-    errors.push(["أدخل اسم الطالب.", "Enter the student name."]);
+  if (v.kind === "case") {
+    try {
+      validateParticipants(v);
+    } catch {
+      errors.push([
+        "راجع قائمة الطلبة في الحالة.",
+        "Review the case students.",
+      ]);
+      return errors;
+    }
+    const students = caseParticipants(v);
+    if (students.some((s) => !s.student.trim()))
+      errors.push([
+        "أدخل اسم كل طالب في الحالة.",
+        "Enter every student's name.",
+      ]);
+    if (students.length > 1 && students.some((s) => !s.className.trim()))
+      errors.push([
+        "حدد شعبة كل طالب في الحالة.",
+        "Enter every student's class.",
+      ]);
+    if (duplicateCaseStudent(students))
+      errors.push([
+        "الطالب مكرر في الحالة.",
+        "A student is duplicated in this case.",
+      ]);
+    if (
+      students.some((s) => s.actionMode === "individual" && !s.action?.trim())
+    )
+      errors.push([
+        "حدد الإجراء الخاص بالطالب أو اختر الإجراء المشترك.",
+        "Choose the student's action or use the shared action.",
+      ]);
+    if (
+      v.participants &&
+      v.status === "مغلقة" &&
+      students.some((s) => {
+        const action = participantAction(v, s);
+        return (
+          action.action &&
+          !noAction(action.action) &&
+          isPendingAction(action.actionState)
+        );
+      })
+    )
+      errors.push([
+        "أكمل الإجراءات المعلقة قبل إغلاق الحالة.",
+        "Complete pending actions before closing the case.",
+      ]);
+  }
   if (v.kind === "late") {
     if (!grades.includes(v.grade))
       errors.push(["اختر الصف.", "Choose a grade."]);
@@ -708,10 +791,12 @@ export function validateStore(value) {
         }
       }
     }
+    if (v.kind === "case") validateParticipants(v);
     if (isLinkedDaily(v)) validateDailySummary(v.summary);
     for (const [key, val] of Object.entries(v))
       if (
         !(isLinkedDaily(v) && key === "summary") &&
+        !(v.kind === "case" && key === "participants") &&
         !groups[v.kind].some((g) => g.key === key) &&
         typeof val !== "string"
       )
@@ -741,11 +826,22 @@ export function caseRegister(saved, profile = {}) {
   v.rows = entries.map((s) => ({
     ...newRow(groups.cases[0]),
     date: s.date,
-    student: s.student || "",
-    className: s.className || "",
+    student: caseParticipants(s)
+      .map((p) => p.student)
+      .join("\n"),
+    className: caseParticipants(s)
+      .map((p) => p.className)
+      .join("\n"),
     type: s.type || "",
     description: caseDescription(s),
-    action: actionText(s.action, s.actionState),
+    action: caseParticipants(s).some((p) => p.actionMode === "individual")
+      ? caseParticipants(s)
+          .map((p) => {
+            const action = participantAction(s, p);
+            return `${p.student}: ${actionText(action.action, action.actionState) || "لم يُسجّل"}`;
+          })
+          .join("\n")
+      : actionText(s.action, s.actionState),
     status: s.status || "",
     due: s.due || "",
   }));

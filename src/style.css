@@ -1217,3 +1217,29 @@ h2 {
   font-size: 14px;
   margin-top: 5px;
 }
+
+.case-student {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #d9ddd7;
+  border-radius: 12px;
+}
+.case-student legend {
+  padding-inline: 6px;
+  font-weight: 600;
+}
+.case-student > .button {
+  margin-top: 12px;
+}
+.case-individual-action {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.case-individual-action input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
