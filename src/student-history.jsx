@@ -4,6 +4,11 @@ import { dateLabel } from "./model.js";
 import "./student-history.css";
 
 function readError(error, t) {
+  if (error.code === "pagination_expired")
+    return t(
+      "انتهت صلاحية القائمة. حدّثها لعرض أحدث السجلات.",
+      "This list has expired. Refresh to load the latest records.",
+    );
   if (error.code === "history_unavailable")
     return t(
       "يرجى مراجعة الإشراف العام لتفعيل سجل الطالب.",
@@ -80,6 +85,7 @@ function useHistoryPage(action, params, listKey) {
       const data = await readStudentData(action, {
         ...JSON.parse(key),
         offset: state.data.nextOffset,
+        ...(state.data.nextCursor ? { cursor: state.data.nextCursor } : {}),
       });
       if (generation.current === version)
         setState((s) => ({
@@ -119,9 +125,15 @@ function PageStatus({ page, t }) {
           <button
             className="button"
             disabled={page.busy}
-            onClick={page.data ? page.more : page.reload}
+            onClick={
+              page.data && page.error.code !== "pagination_expired"
+                ? page.more
+                : page.reload
+            }
           >
-            {t("إعادة المحاولة", "Retry")}
+            {page.error.code === "pagination_expired"
+              ? t("تحديث", "Refresh")
+              : t("إعادة المحاولة", "Retry")}
           </button>
         </div>
       )}

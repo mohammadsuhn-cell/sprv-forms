@@ -204,7 +204,11 @@ export async function readStudentData(action, params = {}) {
   const pageValid =
     Number.isSafeInteger(data?.total) &&
     data.total >= 0 &&
-    (data.nextOffset === null || Number.isSafeInteger(data.nextOffset));
+    (data.nextOffset === null || Number.isSafeInteger(data.nextOffset)) &&
+    (data.nextCursor === undefined ||
+      data.nextCursor === null ||
+      (typeof data.nextCursor === "string" &&
+        /^[A-Za-z0-9_-]{32}:\d{1,9}$/.test(data.nextCursor)));
   const valid =
     action === "students"
       ? pageValid && Array.isArray(data.students) && Array.isArray(data.classes)
