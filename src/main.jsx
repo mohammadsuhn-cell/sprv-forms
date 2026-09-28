@@ -39,6 +39,11 @@ import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
 import { queueBackup } from "./delivery.js";
+import {
+  caseReference,
+  caseReferenceLabel,
+  withReceivedReferences,
+} from "./case-reference.js";
 const activationFragment = location.hash.startsWith("#activate=")
   ? location.hash.slice(1)
   : "";
@@ -147,6 +152,11 @@ function App() {
     form = data.drafts[kind];
   const delivery = useDelivery(data.saved, writeAllowed && !storageError);
   const connected = delivery.connection;
+  useEffect(() => {
+    if (!writeAllowed || storageError) return;
+    const next = withReceivedReferences(currentData.current, delivery.records);
+    if (next !== currentData.current) setData(next);
+  }, [delivery.records, writeAllowed, storageError]);
   useEffect(() => {
     if (
       connected &&
@@ -849,6 +859,15 @@ function App() {
                     ? t("غير محفوظ", "Not saved")
                     : t("مسودة على الجهاز", "Draft on this device")}
                 </span>
+                {kind === "case" && caseReferenceLabel(form) && (
+                  <p className="case-reference">
+                    {t("رقم الحالة: ", "Case reference: ")}
+                    <bdi>
+                      {caseReference(form) ||
+                        t("بانتظار رقم الحالة", "Reference pending")}
+                    </bdi>
+                  </p>
+                )}
               </div>
               <button className="button" onClick={startNew}>
                 {t("جديد", "New")}
@@ -1493,6 +1512,15 @@ function App() {
                       )}
                     </time>
                   )}
+              </span>
+            )}
+            {item.kind === "case" && caseReferenceLabel(item) && (
+              <span className="case-reference">
+                {t("رقم الحالة: ", "Case reference: ")}
+                <bdi>
+                  {caseReference(item) ||
+                    t("بانتظار رقم الحالة", "Reference pending")}
+                </bdi>
               </span>
             )}
           </div>

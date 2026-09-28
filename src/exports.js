@@ -467,9 +467,14 @@ function excelCaseRows(record) {
   const classes = String(record.className || "").split("\n");
   const actions = actionText(record.action, record.actionState).split("\n");
   const rows = [];
-  let row = [record.date, "", "", record.type, "", record.due].map((v) =>
-    String(v || ""),
-  );
+  let row = [
+    [record.date, record.reference].filter(Boolean).join("\n"),
+    "",
+    "",
+    record.type,
+    "",
+    record.due,
+  ].map((v) => String(v || ""));
   const lines = (value, width) =>
     value
       .split("\n")
@@ -543,7 +548,9 @@ export async function excelBlob(form) {
       headerRow: true,
       style: { theme: "TableStyleLight1", showRowStripes: false },
       columns: [
-        "التاريخ",
+        records.some((record) => record.reference)
+          ? "التاريخ / رقم الحالة"
+          : "التاريخ",
         "اسم الطالب",
         "الشعبة",
         "نوع الواقعة",

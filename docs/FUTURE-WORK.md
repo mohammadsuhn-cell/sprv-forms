@@ -2,7 +2,7 @@
 
 Recorded 25 September 2026. The user explicitly deferred these features; the current release only changes export styling and adds a prominent issuance timestamp to late-student exports.
 
-- [ ] Stable document reference, retained when the same record is exported again.
+- [x] Stable receiver-assigned case reference, retained when the same case is revised or exported again. Other form types remain unnumbered.
 - [ ] Recipient choices appropriate to the form, such as school administration, social worker or parent.
 - [ ] Subject generated from the form and incident selections.
 - [ ] Requested purpose/action where needed: for information, follow-up or action.

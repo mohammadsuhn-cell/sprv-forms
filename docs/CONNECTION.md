@@ -21,6 +21,8 @@ In the local inbox, **عنوان الاستقبال** is the laptop's receiving 
 
 The public receiver accepts only signed submissions and activation requests. The local app's administration, personal register and received-record reading API remain on loopback. A delivery receipt is issued after the SQLite transaction commits. Repeated delivery returns the same receipt; received revisions retain their history. A second device cannot overwrite the first device's record without a future reconciliation workflow.
 
+Case receipts now include a permanent `CASE-YYYY-NNNNNN` number assigned by the receiver across all supervisors. It appears on the phone and in case exports, remains unchanged across corrections and retries, and is included in downloaded backups. Before delivery the case shows **بانتظار رقم الحالة**. Older acknowledged cases can retrieve their reference on reopening the updated forms without creating another case or revision. Receivers must be updated before publishing this phone feature.
+
 Implementation: `src/delivery.js`, `src/delivery-ui.jsx`. Device authentication uses WebCrypto ECDSA P-256. Connection tests run from the sibling sprv repo with synthetic data: `npm run check:connection`. The normal forms/export checks also verify unactivated operation stays local.
 
 Live pilot, 26 September 2026: public HTTPS/CORS and access restrictions passed; the user activated their phone through an inbox-generated link, and a saved late-students form reached the local inbox with a receipt. The received form was included in a validated local ZIP. Carrier-data-only and physical-phone offline/reopen checks remain rollout checks; this first receipt does not establish those conditions.

@@ -21,6 +21,7 @@ import {
   absenceReport,
 } from "./absence.js";
 import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
+import { caseReferenceLabel, validCaseReference } from "./case-reference.js";
 import {
   initializeDailyBrief,
   isLinkedDaily,
@@ -395,6 +396,8 @@ export const arDigits = (s) =>
 export const dateLabel = (s) =>
   s ? arDigits(s.split("-").reverse().join("/")) : "";
 export function report(form) {
+  if (form.kind === "case")
+    form = { ...form, reference: caseReferenceLabel(form) };
   form = withSchoolIdentity(form);
   if (form.kind === "absence")
     return {
@@ -792,6 +795,11 @@ export function validateStore(value) {
       }
     }
     if (v.kind === "case") validateParticipants(v);
+    if (
+      v.receiverReference !== undefined &&
+      (v.kind !== "case" || !validCaseReference(v.receiverReference))
+    )
+      throw Error("Invalid receiver reference");
     if (isLinkedDaily(v)) validateDailySummary(v.summary);
     for (const [key, val] of Object.entries(v))
       if (
@@ -826,6 +834,7 @@ export function caseRegister(saved, profile = {}) {
   v.rows = entries.map((s) => ({
     ...newRow(groups.cases[0]),
     date: s.date,
+    reference: caseReferenceLabel(s),
     student: caseParticipants(s)
       .map((p) => p.student)
       .join("\n"),

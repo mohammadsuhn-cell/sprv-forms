@@ -1,6 +1,7 @@
 // Device credentials and pending submissions are deliberately separate from portable JSON backups.
 // The private signing key is non-exportable and never placed in localStorage or an activation URL.
 import { storageKey, validateStore } from "./model.js";
+import { submissionForm, validCaseReference } from "./case-reference.js";
 const databaseName = "sprv-delivery-v1";
 let database;
 const request = (r) =>
@@ -171,7 +172,7 @@ const publicConnection = (c) =>
     : null;
 const sameConnection = (row, c) =>
   row.serverId === c.serverId && row.deviceId === c.deviceId;
-function jobFor(row, c) {
+function jobFor(row, c, revision = (row.receipt?.revision || 0) + 1) {
   return {
     fingerprint: row.fingerprint,
     message: JSON.stringify({
@@ -180,7 +181,7 @@ function jobFor(row, c) {
       deviceId: c.deviceId,
       ...(row.backup
         ? { backup: row.backup }
-        : { revision: (row.receipt?.revision || 0) + 1, form: row.form }),
+        : { revision, form: submissionForm(row.form) }),
     }),
   };
 }
@@ -215,7 +216,8 @@ export async function reconcileSaved() {
   const raw = localStorage.getItem(storageKey);
   const store = raw ? JSON.parse(raw) : null;
   if (!Array.isArray(store?.saved)) return;
-  for (const form of store.saved) {
+  for (const saved of store.saved) {
+    const form = submissionForm(saved);
     if (form.syncSupervisorId !== connection.supervisor.id) continue;
     const fingerprint = JSON.stringify(form);
     const id =
@@ -223,7 +225,26 @@ export async function reconcileSaved() {
     await transaction("records", "readwrite", async (s) => {
       const previous = await request(s.get(id));
       if (previous && !sameConnection(previous, connection)) return;
-      if (previous?.fingerprint === fingerprint) return;
+      if (previous?.fingerprint === fingerprint) {
+        // Replay the exact acknowledged revision once to upgrade an older
+        // receipt. This assigns a reference without submitting another case.
+        if (
+          form.kind === "case" &&
+          previous.receipt &&
+          !previous.receipt.reference &&
+          !previous.job &&
+          !previous.referenceChecked
+        ) {
+          previous.job = jobFor(
+            previous,
+            connection,
+            previous.receipt.revision,
+          );
+          previous.referenceChecked = true;
+          await request(s.put(previous));
+        }
+        return;
+      }
       const row = {
         ...previous,
         id,
@@ -293,7 +314,10 @@ async function deliverOnce() {
           : receipt.formId !== sent.form.id ||
             receipt.revision !== sent.revision) ||
         !receipt.receiptId ||
-        !Number.isFinite(Date.parse(receipt.receivedAt))
+        !Number.isFinite(Date.parse(receipt.receivedAt)) ||
+        (receipt.reference !== undefined &&
+          !validCaseReference(receipt.reference)) ||
+        (row.receipt?.reference && receipt.reference !== row.receipt.reference)
       )
         throw Error("استجابة استلام غير صالحة");
       await transaction("records", "readwrite", async (s) => {
