@@ -516,9 +516,20 @@ function ReceivedExports({ detail, lang, t }) {
   );
 }
 
-function ReceivedReport({ record, scope, view, lang, t, onBack, onStudent }) {
+function ReceivedReport({
+  record,
+  snapshotId,
+  scope,
+  view,
+  lang,
+  t,
+  onBack,
+  onStudent,
+  onRefresh,
+}) {
   const page = useGeneralPage("received-report", {
     recordId: record.id,
+    snapshotId,
     ...scope,
     view,
   });
@@ -527,7 +538,7 @@ function ReceivedReport({ record, scope, view, lang, t, onBack, onStudent }) {
       <button className="back" onClick={onBack}>
         {t("العودة إلى القائمة", "Back to list")}
       </button>
-      <Status page={page} t={t} onRefresh={page.reload} />
+      <Status page={page} t={t} onRefresh={onRefresh} />
       {page.data && (
         <>
           <h1>{page.data.report.title}</h1>
@@ -593,6 +604,7 @@ export function GeneralWorkspace({ connection, lang, t }) {
   const [customStart, setCustomStart] = useState(today()),
     [customEnd, setCustomEnd] = useState(today()),
     [filterError, setFilterError] = useState("");
+  const [studentsRefresh, setStudentsRefresh] = useState(0);
   const [visited, setVisited] = useState({ students: false, reports: false });
   const scroll = useRef({ report: 0, student: 0 });
   const overview = useGeneralPage("overview", { version: 2, ...scope });
@@ -630,7 +642,8 @@ export function GeneralWorkspace({ connection, lang, t }) {
   function refresh() {
     setRecord(null);
     setStudentId("");
-    overview.reload();
+    if (tab === "students") setStudentsRefresh((n) => n + 1);
+    else overview.reload();
   }
   const hidden = !!record || !!studentId;
   return (
@@ -643,7 +656,11 @@ export function GeneralWorkspace({ connection, lang, t }) {
               {connection.supervisor.name} · {schoolIdentity.school}
             </p>
           </div>
-          <button className="button" onClick={refresh} disabled={overview.busy}>
+          <button
+            className="button"
+            onClick={refresh}
+            disabled={tab !== "students" && overview.busy}
+          >
             {t("تحديث", "Refresh")}
           </button>
         </div>
@@ -1031,7 +1048,7 @@ export function GeneralWorkspace({ connection, lang, t }) {
         {visited.students && (
           <div hidden={tab !== "students"}>
             <StudentDirectory
-              key={scope.grade}
+              key={`${scope.grade}:${studentsRefresh}`}
               grade={scope.grade}
               query={query}
               setQuery={setQuery}
@@ -1048,10 +1065,12 @@ export function GeneralWorkspace({ connection, lang, t }) {
           <ReceivedReport
             key={record.id}
             record={record}
+            snapshotId={snapshot?.snapshotId}
             scope={scope}
             view={record.detailView || view}
             lang={lang}
             t={t}
+            onRefresh={refresh}
             onBack={() => back("report")}
             onStudent={openStudent}
           />
