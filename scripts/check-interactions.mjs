@@ -120,6 +120,35 @@ try {
   await page.getByLabel("اسم الطالب", { exact: true }).fill("طالب معدل");
   await button(page, "حفظ الحالة").click();
   assert.equal((await read(page)).saved.length, 1);
+  const submitted = (await read(page)).saved[0];
+  await button(page, "النماذج").click();
+  await button(page, "تسجيل حالة").click();
+  await expect(page.getByLabel("اسم الطالب", { exact: true })).toHaveValue("");
+  assert.notEqual((await read(page)).drafts.case.id, submitted.id);
+  assert.deepEqual((await read(page)).saved[0], submitted);
+  await page
+    .getByLabel("اسم الطالب", { exact: true })
+    .fill("مسودة تستكمل لاحقًا");
+  await button(page, "النماذج").click();
+  await button(page, "تسجيل حالة").click();
+  await expect(page.getByLabel("اسم الطالب", { exact: true })).toHaveValue(
+    "مسودة تستكمل لاحقًا",
+  );
+  await button(page, "النماذج").click();
+  await button(page, "عرض الكل").click();
+  page.once("dialog", (d) => d.accept());
+  await page.locator(".saved-open").click();
+  await page
+    .getByLabel("المعلم المبلّغ (اختياري)", { exact: true })
+    .fill("تعديل غير محفوظ");
+  await button(page, "النماذج").click();
+  await button(page, "تسجيل حالة").click();
+  await expect(
+    page.getByLabel("المعلم المبلّغ (اختياري)", { exact: true }),
+  ).toHaveValue("تعديل غير محفوظ");
+  assert.equal((await read(page)).drafts.case.id, submitted.id);
+  await button(page, "حفظ الحالة").click();
+  assert.equal((await read(page)).saved.length, 1);
   await page
     .getByLabel("بحث في المحفوظات", { exact: true })
     .fill("لا يوجد هذا الاسم");
@@ -183,7 +212,7 @@ try {
   assert.equal((await read(page)).drafts.case.supervisor, "المشرف التجريبي");
   await button(page, "النماذج").click();
   await button(page, "تسجيل حالة").click();
-  await button(page, "جديد").click(); // Saved copy remains, so no discard confirmation.
+  await expect(page.getByLabel("اسم الطالب", { exact: true })).toHaveValue("");
   await page.getByLabel("اسم الطالب", { exact: true }).fill("مسودة غير محفوظة");
   await clickDialog(page, "جديد", false);
   await expect(page.getByLabel("اسم الطالب", { exact: true })).toHaveValue(

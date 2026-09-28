@@ -43,6 +43,7 @@ import { StudentHistory } from "./student-history.jsx";
 import {
   caseReference,
   caseReferenceLabel,
+  submissionForm,
   withReceivedReferences,
 } from "./case-reference.js";
 const activationFragment = location.hash.startsWith("#activate=")
@@ -308,7 +309,17 @@ function App() {
     if (readOnlyConnection) return;
     setKind(k);
     const existing = data.drafts[k];
-    const base = existing || newForm(k, data.profile, data.roster);
+    const savedCase =
+      k === "case" &&
+      existing &&
+      data.saved.some(
+        (saved) =>
+          saved.id === existing.id &&
+          JSON.stringify(submissionForm(saved)) ===
+            JSON.stringify(submissionForm(existing)),
+      );
+    const base =
+      existing && !savedCase ? existing : newForm(k, data.profile, data.roster);
     const draft =
       connected && !base.savedAt && !base.syncSupervisorId
         ? { ...base, syncSupervisorId: connected.supervisor.id }
