@@ -25,7 +25,10 @@ export function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 export async function wordBlob(form) {
-  const stamp = exportStamp(form.supervisor);
+  return wordReportBlob(report(form));
+}
+export async function wordReportBlob(r) {
+  const stamp = exportStamp(r.supervisor);
   const {
     Document,
     Packer,
@@ -44,8 +47,7 @@ export async function wordBlob(form) {
     TableLayoutType,
     VerticalAlign,
   } = await import("docx");
-  const r = report(form),
-    head = reportHeader(r, stamp),
+  const head = reportHeader(r, stamp),
     pageWidth = r.landscape ? 15398 : 10466;
   const border = { style: BorderStyle.SINGLE, size: 6, color: colors.line };
   const borders = Object.fromEntries(
@@ -312,12 +314,15 @@ export async function wordBlob(form) {
   return Packer.toBlob(doc);
 }
 export async function pdfBlob(form) {
-  const stamp = exportStamp(form.supervisor);
+  return pdfReportBlob(report(form));
+}
+export async function pdfReportBlob(source) {
+  const stamp = exportStamp(source.supervisor);
   const [{ renderPages }, { jsPDF }] = await Promise.all([
     import("./pdf-pages.js"),
     import("jspdf"),
   ]);
-  const r = { ...report(form), exportStamp: stamp },
+  const r = { ...source, exportStamp: stamp },
     pages = await renderPages(r);
   try {
     const pdf = new jsPDF({
@@ -518,9 +523,11 @@ function excelCaseRows(record) {
 }
 
 export async function excelBlob(form) {
-  const stamp = exportStamp(form.supervisor);
   form = withSchoolIdentity(form);
-  const r = report(form);
+  return excelReportBlob(report(form), form);
+}
+export async function excelReportBlob(r, form = null) {
+  const stamp = exportStamp(r.supervisor);
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
   const addSheet = (name, widths, landscape) => {
@@ -537,7 +544,7 @@ export async function excelBlob(form) {
     return sheet;
   };
   const sectionRows = new Map();
-  if (["case", "cases"].includes(form.kind)) {
+  if (form && ["case", "cases"].includes(form.kind)) {
     const sheet = addSheet("الحالات", [16, 32, 12, 28, 32, 18], true);
     excelHeader(sheet, r, stamp, "سجل الحالات والمتابعة");
     const records =
@@ -604,7 +611,7 @@ export async function excelBlob(form) {
       const sheet = addSheet(
         `${index + 1} ${part.title}`.slice(0, 31),
         widths,
-        count > 4,
+        count > 4 || (r.kind === "student-profile" && count > 2),
       );
       excelHeader(sheet, r, stamp, `${r.title} · ${part.title}`);
       sheet.addRow(part.columns);

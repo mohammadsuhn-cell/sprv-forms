@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { readStudentData } from "./delivery.js";
 import { dateLabel } from "./model.js";
+import { FileActions } from "./file-actions.jsx";
+import {
+  loadProfileHistory,
+  profileReport,
+  historyFileName,
+} from "./history-export.js";
 import "./student-history.css";
 
 function readError(error, t) {
@@ -203,7 +209,152 @@ function ReportContent({ report }) {
   );
 }
 
-function HistoryEntry({ record, studentId, t, formatDate }) {
+function HistoryExports({ studentId, record, lang, t }) {
+  const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState(null);
+  const generation = useRef(0);
+  const pending = useRef(false);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [],
+  );
+  async function prepare(extension) {
+    if (pending.current) return;
+    pending.current = true;
+    const version = ++generation.current;
+    const active = () => version === generation.current;
+    setBusy(true);
+    setFile(null);
+    setError(null);
+    try {
+      const lib = await import("./exports.js");
+      let blob, name;
+      if (record) {
+        const detail = await readStudentData("student-report", {
+          studentId,
+          recordId: record.id,
+        });
+        if (!active()) return;
+        if (!detail.form || !["case", "cases"].includes(detail.form.kind))
+          throw Object.assign(new Error("Receiver update needed"), {
+            code: "history_unavailable",
+          });
+        blob = await (
+          extension === "pdf"
+            ? lib.pdfBlob
+            : extension === "docx"
+              ? lib.wordBlob
+              : lib.excelBlob
+        )(detail.form);
+        name = historyFileName(
+          `${detail.report.title}-${detail.reference || detail.date}`,
+          extension,
+        );
+      } else {
+        const history = await loadProfileHistory(
+          studentId,
+          readStudentData,
+          active,
+        );
+        const report = profileReport(history);
+        blob = await (
+          extension === "pdf"
+            ? lib.pdfReportBlob
+            : extension === "docx"
+              ? lib.wordReportBlob
+              : lib.excelReportBlob
+        )(report);
+        name = historyFileName(`سجل الطالب-${history.student.name}`, extension);
+      }
+      if (active()) setFile({ blob, name });
+    } catch (e) {
+      if (active() && e.name !== "AbortError")
+        setError(
+          e.code || e.status
+            ? readError(e, t)
+            : t(
+                "تعذّر إعداد الملف. تأكد من الاتصال وأعد المحاولة.",
+                "Could not prepare the file. Check your connection and retry.",
+              ),
+        );
+    } finally {
+      if (active()) {
+        pending.current = false;
+        setBusy(false);
+      }
+    }
+  }
+  async function share() {
+    const nativeFile = new File([file.blob], file.name, {
+      type: file.blob.type,
+    });
+    try {
+      if (navigator.canShare?.({ files: [nativeFile] }))
+        await navigator.share({ files: [nativeFile], title: file.name });
+      else (await import("./exports.js")).download(file.blob, file.name);
+    } catch (e) {
+      if (e.name !== "AbortError")
+        setError(
+          t(
+            "تعذّرت المشاركة. استخدم التنزيل.",
+            "Sharing failed. Use download.",
+          ),
+        );
+    }
+  }
+  const title = record
+    ? t("تصدير الحالة", "Export case")
+    : t("تصدير سجل الطالب الكامل", "Export full student profile");
+  return (
+    <section className="history-export" aria-label={title}>
+      <strong>{title}</strong>
+      {!record && (
+        <p className="hint">
+          {t(
+            "ملخص الحالات وجميع تواريخ التأخر، بما فيها السجلات غير المعروضة بعد.",
+            "Case summaries and every late date, including records not yet displayed.",
+          )}
+        </p>
+      )}
+      <div className="history-actions">
+        {[
+          ["pdf", "PDF"],
+          ["docx", "Word"],
+          ["xlsx", "Excel"],
+        ].map(([extension, label]) => (
+          <button
+            className="button"
+            key={extension}
+            disabled={busy}
+            onClick={() => prepare(extension)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {busy && (
+        <p role="status">
+          {t("جارٍ إعداد الملف الكامل…", "Preparing the complete file…")}
+        </p>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {file && (
+        <FileActions
+          file={file}
+          lang={lang}
+          onShare={share}
+          onClose={() => setFile(null)}
+          onError={setError}
+        />
+      )}
+    </section>
+  );
+}
+
+function HistoryEntry({ record, studentId, t, formatDate, lang }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -273,6 +424,14 @@ function HistoryEntry({ record, studentId, t, formatDate }) {
         </div>
       )}
       {detail && <ReportContent report={detail.report} />}
+      {detail && ["case", "cases"].includes(record.kind) && (
+        <HistoryExports
+          studentId={studentId}
+          record={record}
+          lang={lang}
+          t={t}
+        />
+      )}
     </details>
   );
 }
@@ -345,6 +504,7 @@ function StudentProfile({ studentId, lang, t, onBack }) {
               )}
             </p>
           </div>
+          <HistoryExports studentId={data.student.id} lang={lang} t={t} />
         </>
       )}
       <div
@@ -383,6 +543,7 @@ function StudentProfile({ studentId, lang, t, onBack }) {
               studentId={data.student.id}
               t={t}
               formatDate={formatDate}
+              lang={lang}
             />
           ))}
           {data.nextOffset !== null && (

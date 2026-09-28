@@ -110,6 +110,26 @@
 .student-profile h1 {
   overflow-wrap: anywhere;
 }
+.history-export {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  margin-block: 16px;
+  background: #fafbf9;
+}
+.history-export > strong {
+  display: block;
+}
+.history-export .history-actions {
+  margin-block: 12px 0;
+}
+.history-export .file-ready {
+  position: static;
+  transform: none;
+  width: 100%;
+  box-shadow: none;
+  margin-top: 16px;
+}
 @media (max-width: 560px) {
   .history-search {
     grid-template-columns: 1fr;
