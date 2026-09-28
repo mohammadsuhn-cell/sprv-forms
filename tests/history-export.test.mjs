@@ -112,6 +112,8 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
   assert.equal(r.tables[0].rows.length, 35);
   assert.equal(r.tables[1].rows.length, 2);
   assert(r.tables[0].rows[34][0].includes("CASE-2026-000034"));
+  assert.deepEqual(r.sections, []);
+  assert.equal(r.tables[0].rows[0][1], "متابعة");
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(await (await excelReportBlob(r)).arrayBuffer());
   const allCells = JSON.stringify(
@@ -125,6 +127,13 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
   ])
     assert(allCells.includes(value), value);
   assert(book.worksheets.every((s) => s.views[0].rightToLeft));
+  for (const value of [
+    "وصف مختصر للواقعة",
+    "عن هذا الملخص",
+    "نطاق السجل",
+    "إحصائية السجل",
+  ])
+    assert(!allCells.includes(value), value);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sprv-history-export-"));
   try {
     const file = path.join(dir, "profile.docx");
@@ -144,6 +153,8 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
       "w:tblHeader",
     ])
       assert(xml.includes(value), value);
+    assert(!xml.includes("وصف مختصر للواقعة"));
+    assert(!xml.includes("عن هذا الملخص"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -154,6 +165,10 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
     total: 0,
     totals: { caseReports: 0, lateReports: 0, lateDays: 0, lateDates: [] },
   });
-  assert.equal(empty.tables.length, 0);
-  assert(JSON.stringify(empty).includes("لا توجد حالات واردة"));
+  assert.equal(empty.tables.length, 2);
+  assert(empty.tables.every((table) => table.rows.length === 0));
+  assert.deepEqual(empty.sections, []);
+  const emptyBook = new ExcelJS.Workbook();
+  await emptyBook.xlsx.load(await (await excelReportBlob(empty)).arrayBuffer());
+  assert.equal(emptyBook.worksheets.length, 2);
 });
