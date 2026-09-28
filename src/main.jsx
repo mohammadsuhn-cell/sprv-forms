@@ -39,6 +39,7 @@ import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
 import { queueBackup } from "./delivery.js";
+import { StudentHistory } from "./student-history.jsx";
 import {
   caseReference,
   caseReferenceLabel,
@@ -141,6 +142,8 @@ function App() {
     [busy, setBusy] = useState(""),
     [query, setQuery] = useState(""),
     [dueOnly, setDueOnly] = useState(false),
+    [historyStudentId, setHistoryStudentId] = useState(""),
+    [historyReturnPage, setHistoryReturnPage] = useState("home"),
     [readyFile, setReadyFile] = useState(null);
   const restoreRef = useRef(),
     rosterRef = useRef(),
@@ -152,6 +155,12 @@ function App() {
     form = data.drafts[kind];
   const delivery = useDelivery(data.saved, writeAllowed && !storageError);
   const connected = delivery.connection;
+  const readOnlyConnection = connected?.supervisor.role === "general";
+  function openStudentHistory(studentId = "") {
+    setHistoryStudentId(studentId);
+    setHistoryReturnPage(page);
+    setPage("student-history");
+  }
   useEffect(() => {
     if (!writeAllowed || storageError) return;
     const next = withReceivedReferences(currentData.current, delivery.records);
@@ -166,15 +175,18 @@ function App() {
     )
       activateProfile(connected);
   }, [connected?.supervisor.id]);
-  const earlierForms = connected
-    ? data.saved.filter(
-        (s) =>
-          !s.syncSupervisorId &&
-          s.supervisor === connected.supervisor.name &&
-          (!s.grade || s.grade === connected.supervisor.grade),
-      )
-    : [];
+  const earlierForms =
+    connected && !readOnlyConnection
+      ? data.saved.filter(
+          (s) =>
+            !s.syncSupervisorId &&
+            s.supervisor === connected.supervisor.name &&
+            (!s.grade || s.grade === connected.supervisor.grade),
+        )
+      : [];
   async function activateProfile(connection) {
+    // A reader identity must not relabel this browser's existing drafts or store a null grade.
+    if (connection.supervisor.role === "general") return;
     setData((d) => {
       const next = withSupervisor(
         d,
@@ -293,6 +305,7 @@ function App() {
       );
   }
   function openKind(k) {
+    if (readOnlyConnection) return;
     setKind(k);
     const existing = data.drafts[k];
     const base = existing || newForm(k, data.profile, data.roster);
@@ -341,6 +354,7 @@ function App() {
     return true;
   }
   function save() {
+    if (readOnlyConnection) return;
     if (!delivery.ready) {
       notify(
         t(
@@ -768,9 +782,27 @@ function App() {
           </div>
         )}
         {page !== "home" && (
-          <button className="back" onClick={() => setPage("home")}>
-            {t("النماذج", "Forms")}
+          <button
+            className="back"
+            onClick={() =>
+              setPage(page === "student-history" ? historyReturnPage : "home")
+            }
+          >
+            {page === "student-history" && historyReturnPage === "form"
+              ? t("العودة إلى النموذج", "Back to form")
+              : t("النماذج", "Forms")}
           </button>
+        )}
+        {page === "student-history" && (
+          <StudentHistory
+            key={connected?.deviceId || "unpaired"}
+            connection={connected}
+            ready={delivery.ready}
+            initialStudentId={historyStudentId}
+            lang={data.lang}
+            t={t}
+            onSettings={() => setPage("settings")}
+          />
         )}
         {page === "home" && (
           <>
@@ -809,23 +841,33 @@ function App() {
               </div>
             )}
             <div className="form-cards">
+              <button
+                className="form-card"
+                onClick={() => openStudentHistory()}
+              >
+                <div>
+                  <h2>{t("سجل الطالب", "Student history")}</h2>
+                </div>
+              </button>
               {[
                 ["case", "تسجيل حالة", "Record a case"],
                 ["daily", "الموجز اليومي", "Daily brief"],
                 ["absence", "إحصائية الغياب اليومي", "Daily absence sheet"],
                 ["late", "الطلبة المتأخرون", "Late students"],
                 ["staffing", "سجل المعلمين والبدلاء", "Teachers & substitutes"],
-              ].map(([key, ar, english]) => (
-                <button
-                  key={key}
-                  className="form-card"
-                  onClick={() => openKind(key)}
-                >
-                  <div>
-                    <h2>{t(ar, english)}</h2>
-                  </div>
-                </button>
-              ))}
+              ]
+                .filter(() => !readOnlyConnection)
+                .map(([key, ar, english]) => (
+                  <button
+                    key={key}
+                    className="form-card"
+                    onClick={() => openKind(key)}
+                  >
+                    <div>
+                      <h2>{t(ar, english)}</h2>
+                    </div>
+                  </button>
+                ))}
             </div>
             {data.saved.length > 0 && (
               <section className="recent">
@@ -919,6 +961,7 @@ function App() {
                   grade={data.profile.grade}
                   lang={data.lang}
                   onChange={setDraft}
+                  onOpenHistory={connected ? openStudentHistory : undefined}
                   Field={Field}
                 />
                 <details className="panel optional">
@@ -1021,6 +1064,7 @@ function App() {
                       roster={data.roster}
                       lang={data.lang}
                       onChange={setDraft}
+                      onOpenHistory={connected ? openStudentHistory : undefined}
                       Field={Field}
                     />
                   ) : (

@@ -98,7 +98,14 @@ export function StudentPicker({ form, roster, grade, lang, onChange }) {
   );
 }
 
-export function LateChecklist({ form, roster, lang, onChange, Field }) {
+export function LateChecklist({
+  form,
+  roster,
+  lang,
+  onChange,
+  onOpenHistory,
+  Field,
+}) {
   const t = (ar, en) => (lang === "en" ? en : ar);
   const [query, setQuery] = useState("");
   const [selectedOnly, setSelectedOnly] = useState(false);
@@ -426,6 +433,15 @@ export function LateChecklist({ form, roster, lang, onChange, Field }) {
                   {t("إزالة", "Remove")}
                 </button>
               </div>
+              {onOpenHistory && row.studentId && (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => onOpenHistory(row.studentId)}
+                >
+                  {t("سجل الطالب", "Student history")}
+                </button>
+              )}
               <details className="row-options">
                 <summary>{t("تفاصيل التأخر", "Lateness details")}</summary>
                 <div className="fields">

@@ -16,7 +16,15 @@ import {
   noAction,
 } from "./case-options.js";
 
-export function CaseEditor({ form, roster, grade, lang, onChange, Field }) {
+export function CaseEditor({
+  form,
+  roster,
+  grade,
+  lang,
+  onChange,
+  onOpenHistory,
+  Field,
+}) {
   const t = (ar, en) => (lang === "en" ? en : ar);
   const allFields = caseSections.flatMap((s) => s.fields);
   const field = (key) => allFields.find((f) => f.key === key) || fields[key];
@@ -98,6 +106,15 @@ export function CaseEditor({ form, roster, grade, lang, onChange, Field }) {
                 ))
               )}
             </div>
+            {onOpenHistory && student.studentId && (
+              <button
+                type="button"
+                className="button"
+                onClick={() => onOpenHistory(student.studentId)}
+              >
+                {t("سجل الطالب", "Student history")}
+              </button>
+            )}
             {students.length > 1 && (
               <button
                 type="button"

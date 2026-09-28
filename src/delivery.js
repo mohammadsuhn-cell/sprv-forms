@@ -170,6 +170,63 @@ const publicConnection = (c) =>
         endpoint: c.endpoint,
       }
     : null;
+
+// Shared history is fetched on demand, never added to local forms or the delivery queue.
+export async function readStudentData(action, params = {}) {
+  if (!["students", "student-history", "student-report"].includes(action))
+    throw Error("طلب سجل غير صالح");
+  const connection = await readSetting("connection");
+  if (!connection)
+    throw Object.assign(Error("فعّل اتصال المشرف من الإعدادات أولًا"), {
+      code: "unpaired",
+    });
+  const message = JSON.stringify({
+    ...params,
+    protocol: 1,
+    serverId: connection.serverId,
+    deviceId: connection.deviceId,
+    action,
+    requestedAt: new Date().toISOString(),
+  });
+  const signature = base64(
+    new Uint8Array(
+      await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        connection.privateKey,
+        new TextEncoder().encode(message),
+      ),
+    ),
+  );
+  const data = await post(connection.endpoint, "/v1/" + action, {
+    message,
+    signature,
+  });
+  const pageValid =
+    Number.isSafeInteger(data?.total) &&
+    data.total >= 0 &&
+    (data.nextOffset === null || Number.isSafeInteger(data.nextOffset));
+  const valid =
+    action === "students"
+      ? pageValid && Array.isArray(data.students) && Array.isArray(data.classes)
+      : action === "student-history"
+        ? pageValid &&
+          data.student?.id &&
+          Array.isArray(data.records) &&
+          Array.isArray(data.totals?.lateDates) &&
+          [data.totals?.caseReports, data.totals?.lateDays].every(
+            Number.isSafeInteger,
+          ) &&
+          Number.isFinite(Date.parse(data.fetchedAt))
+        : data?.id &&
+          data.report &&
+          Array.isArray(data.report.sections) &&
+          Array.isArray(data.report.tables);
+  if (!valid)
+    throw Object.assign(Error("سجل الطالب غير متاح بعد لدى الإشراف العام"), {
+      code: "history_unavailable",
+    });
+  return data;
+}
 const sameConnection = (row, c) =>
   row.serverId === c.serverId && row.deviceId === c.deviceId;
 function jobFor(row, c, revision = (row.receipt?.revision || 0) + 1) {
@@ -188,7 +245,7 @@ function jobFor(row, c, revision = (row.receipt?.revision || 0) + 1) {
 // Only an explicit backup download creates a job. Draft changes never call this.
 export async function queueBackup(contents, filename) {
   const connection = await readSetting("connection");
-  if (!connection) return null;
+  if (!connection || connection.supervisor.role === "general") return null;
   if (new Blob([contents]).size > 15000000)
     throw Error("النسخة أكبر من حد الإرسال (١٥ ميغابايت)");
   validateStore(JSON.parse(contents));
@@ -212,7 +269,7 @@ export async function queueBackup(contents, filename) {
 }
 export async function reconcileSaved() {
   const connection = await readSetting("connection");
-  if (!connection) return;
+  if (!connection || connection.supervisor.role === "general") return;
   const raw = localStorage.getItem(storageKey);
   const store = raw ? JSON.parse(raw) : null;
   if (!Array.isArray(store?.saved)) return;
@@ -275,7 +332,7 @@ export async function deliver() {
 }
 async function deliverOnce() {
   const connection = await readSetting("connection");
-  if (!connection) return;
+  if (!connection || connection.supervisor.role === "general") return;
   await reconcileSaved();
   const rows = await transaction("records", "readonly", (s) =>
     request(s.getAll()),

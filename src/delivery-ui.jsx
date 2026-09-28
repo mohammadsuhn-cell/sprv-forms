@@ -107,7 +107,9 @@ export function DeliveryPanel({
         <>
           <p>
             <strong>{delivery.connection.supervisor.name}</strong> ·{" "}
-            {delivery.connection.supervisor.grade}
+            {delivery.connection.supervisor.role === "general"
+              ? t("مشرف عام · قراءة فقط", "General supervisor · read only")
+              : delivery.connection.supervisor.grade}
           </p>
           <p role="status">
             {delivery.blocked
@@ -186,13 +188,20 @@ export function DeliveryPanel({
             <>
               <p>
                 <strong>{preview.info.supervisor.name}</strong> ·{" "}
-                {preview.info.supervisor.grade}
+                {preview.info.supervisor.role === "general"
+                  ? t("مشرف عام · قراءة فقط", "General supervisor · read only")
+                  : preview.info.supervisor.grade}
               </p>
               <p>
-                {t(
-                  "تُرسل النماذج بعد حفظها إلى الإشراف العام. المسودات لا تُرسل أثناء التحرير؛ تُضمّن مع القائمة والإعدادات عند تنزيل نسخة احتياطية وإرسالها.",
-                  "Saved forms go to general supervision. Draft edits stay local; downloading and sending a backup includes drafts, roster and settings.",
-                )}
+                {preview.info.supervisor.role === "general"
+                  ? t(
+                      "يتيح هذا الاتصال الاطلاع على سجلات الطلبة لدى الإشراف العام. الحساب للقراءة فقط.",
+                      "This connection allows you to read shared student histories. The account is read only.",
+                    )
+                  : t(
+                      "تُرسل النماذج بعد حفظها إلى الإشراف العام. المسودات لا تُرسل أثناء التحرير؛ تُضمّن مع القائمة والإعدادات عند تنزيل نسخة احتياطية وإرسالها.",
+                      "Saved forms go to general supervision. Draft edits stay local; downloading and sending a backup includes drafts, roster and settings.",
+                    )}
               </p>
               <button
                 className="button primary"
