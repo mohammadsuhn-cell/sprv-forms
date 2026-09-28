@@ -172,9 +172,7 @@ const publicConnection = (c) =>
     : null;
 
 // Shared history is fetched on demand, never added to local forms or the delivery queue.
-export async function readStudentData(action, params = {}) {
-  if (!["students", "student-history", "student-report"].includes(action))
-    throw Error("طلب سجل غير صالح");
+async function signedRead(action, params) {
   const connection = await readSetting("connection");
   if (!connection)
     throw Object.assign(Error("فعّل اتصال المشرف من الإعدادات أولًا"), {
@@ -201,6 +199,68 @@ export async function readStudentData(action, params = {}) {
     message,
     signature,
   });
+  const current = await readSetting("connection");
+  if (
+    !current ||
+    current.deviceId !== connection.deviceId ||
+    current.serverId !== connection.serverId ||
+    current.endpoint !== connection.endpoint ||
+    current.supervisor.id !== connection.supervisor.id ||
+    current.supervisor.grade !== connection.supervisor.grade ||
+    current.supervisor.role !== connection.supervisor.role
+  )
+    throw Object.assign(Error("تغير اتصال الجهاز"), { code: "unpaired" });
+  return data;
+}
+const validReadPage = (data) =>
+  Number.isSafeInteger(data?.total) &&
+  data.total >= 0 &&
+  (data.nextOffset === null || Number.isSafeInteger(data.nextOffset)) &&
+  (data.nextCursor == null ||
+    (typeof data.nextCursor === "string" &&
+      /^[A-Za-z0-9_-]{32}:\d{1,9}$/.test(data.nextCursor)));
+export async function readGeneralData(action, params = {}) {
+  if (
+    ![
+      "overview",
+      "overview-details",
+      "received-reports",
+      "received-report",
+    ].includes(action)
+  )
+    throw Error("طلب غير صالح");
+  const data = await signedRead(action, params);
+  const reportValid =
+    data?.id &&
+    data.form &&
+    Array.isArray(data.report?.sections) &&
+    Array.isArray(data.report?.tables);
+  const snapshotValid =
+    typeof data?.snapshotId === "string" &&
+    /^[A-Za-z0-9_-]{32}$/.test(data.snapshotId) &&
+    Number.isFinite(Date.parse(data.fetchedAt));
+  const valid =
+    action === "received-report"
+      ? reportValid
+      : snapshotValid &&
+        (action === "overview"
+          ? data.version === 2 &&
+            data.scope &&
+            data.totals &&
+            Array.isArray(data.grades) &&
+            Array.isArray(data.supervisors) &&
+            data.coverage
+          : validReadPage(data) && Array.isArray(data.items));
+  if (!valid)
+    throw Object.assign(Error("يرجى تحديث جهاز الاستقبال"), {
+      code: "overview_unavailable",
+    });
+  return data;
+}
+export async function readStudentData(action, params = {}) {
+  if (!["students", "student-history", "student-report"].includes(action))
+    throw Error("طلب سجل غير صالح");
+  const data = await signedRead(action, params);
   const pageValid =
     Number.isSafeInteger(data?.total) &&
     data.total >= 0 &&

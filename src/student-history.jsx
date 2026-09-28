@@ -9,7 +9,7 @@ import {
 } from "./history-export.js";
 import "./student-history.css";
 
-function readError(error, t) {
+export function readError(error, t) {
   if (error.code === "pagination_expired")
     return t(
       "انتهت صلاحية القائمة. حدّثها لعرض أحدث السجلات.",
@@ -147,9 +147,56 @@ function PageStatus({ page, t }) {
   );
 }
 
-function ReportContent({ report }) {
+export function ReportContent({ report }) {
   return (
     <div className="history-report" dir="rtl" lang="ar">
+      {report.absence && (
+        <section>
+          <h2>
+            {report.absence.grade} · {dateLabel(report.absence.date)} ·{" "}
+            {report.absence.day}
+          </h2>
+          <p>
+            الغائبون: {report.absence.absent} · الحاضرون:{" "}
+            {report.absence.present} · المقيدون: {report.absence.total}
+          </p>
+          <div
+            className="history-table"
+            tabIndex={0}
+            role="region"
+            aria-label="إحصائية الغياب"
+          >
+            <table>
+              <thead>
+                <tr>
+                  {[
+                    "الشعبة",
+                    "المقيدون",
+                    "الحاضرون",
+                    "الغائبون",
+                    "أسماء الغائبين",
+                  ].map((label) => (
+                    <th scope="col" key={label}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.absence.classes.map((entry) => (
+                  <tr key={entry.className}>
+                    <td>{entry.className}</td>
+                    <td>{entry.total ?? "—"}</td>
+                    <td>{entry.present ?? "—"}</td>
+                    <td>{entry.absent}</td>
+                    <td>{entry.students.join("، ") || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <dl>
         <dt>المشرف</dt>
         <dd>{report.supervisor}</dd>
@@ -436,7 +483,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
   );
 }
 
-function StudentProfile({ studentId, lang, t, onBack }) {
+export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
   const [kind, setKind] = useState("");
   const page = useHistoryPage(
     "student-history",
@@ -449,7 +496,7 @@ function StudentProfile({ studentId, lang, t, onBack }) {
     <section className="student-profile">
       <div className="history-actions">
         <button className="button" onClick={onBack}>
-          {t("قائمة الطلبة", "Student list")}
+          {backLabel || t("قائمة الطلبة", "Student list")}
         </button>
         <button className="button" onClick={page.reload} disabled={page.busy}>
           {t("تحديث السجل", "Refresh history")}
@@ -558,15 +605,20 @@ function StudentProfile({ studentId, lang, t, onBack }) {
   );
 }
 
-function StudentDirectory({
+export function StudentDirectory({
   query,
   setQuery,
   className,
   setClassName,
   onSelect,
   t,
+  grade = "",
 }) {
-  const page = useHistoryPage("students", { query, className }, "students");
+  const page = useHistoryPage(
+    "students",
+    { query, className, ...(grade ? { grade } : {}) },
+    "students",
+  );
   const classes = useRef([]);
   if (page.data) classes.current = page.data.classes;
   return (

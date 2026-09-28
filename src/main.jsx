@@ -40,6 +40,7 @@ import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
 import { queueBackup } from "./delivery.js";
 import { StudentHistory } from "./student-history.jsx";
+import { GeneralWorkspace } from "./general-workspace.jsx";
 import {
   caseReference,
   caseReferenceLabel,
@@ -157,6 +158,15 @@ function App() {
   const delivery = useDelivery(data.saved, writeAllowed && !storageError);
   const connected = delivery.connection;
   const readOnlyConnection = connected?.supervisor.role === "general";
+  useEffect(() => {
+    if (!readOnlyConnection) return;
+    setPage((current) =>
+      ["home", "settings"].includes(current) ? current : "home",
+    );
+    setReadyFile(null);
+    setErrors([]);
+    exportRevision.current++;
+  }, [readOnlyConnection]);
   function openStudentHistory(studentId = "") {
     setHistoryStudentId(studentId);
     setHistoryReturnPage(page);
@@ -738,7 +748,11 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <div>
-            <strong>{t("نماذج الإشراف", "Supervision forms")}</strong>
+            <strong>
+              {readOnlyConnection
+                ? t("الإشراف العام", "General supervision")
+                : t("نماذج الإشراف", "Supervision forms")}
+            </strong>
             <span>{t("الإشراف المدرسي", "School supervision")}</span>
           </div>
         </div>
@@ -801,7 +815,9 @@ function App() {
           >
             {page === "student-history" && historyReturnPage === "form"
               ? t("العودة إلى النموذج", "Back to form")
-              : t("النماذج", "Forms")}
+              : readOnlyConnection
+                ? t("الإشراف العام", "General supervision")
+                : t("النماذج", "Forms")}
           </button>
         )}
         {page === "student-history" && (
@@ -815,7 +831,20 @@ function App() {
             onSettings={() => setPage("settings")}
           />
         )}
-        {page === "home" && (
+        {readOnlyConnection && (
+          <div hidden={page !== "home"}>
+            <GeneralWorkspace
+              key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
+              connection={connected}
+              lang={data.lang}
+              t={t}
+            />
+          </div>
+        )}
+        {page === "home" && !delivery.ready && (
+          <p role="status">{t("جارٍ تحميل الاتصال…", "Loading connection…")}</p>
+        )}
+        {page === "home" && delivery.ready && !readOnlyConnection && (
           <>
             <div className="page-heading">
               <h1>{t("النماذج", "Forms")}</h1>
@@ -898,7 +927,7 @@ function App() {
             )}
           </>
         )}
-        {page === "form" && form && (
+        {page === "form" && form && !readOnlyConnection && (
           <>
             <div className="page-heading">
               <div>
@@ -1194,7 +1223,7 @@ function App() {
             )}
           </>
         )}
-        {page === "saved" && (
+        {page === "saved" && !readOnlyConnection && (
           <>
             <div className="page-heading">
               <h1>{t("السجلات والمتابعة", "Records & follow-up")}</h1>
@@ -1253,214 +1282,236 @@ function App() {
               existingCount={earlierForms.length}
               initialInvitation={activationFragment}
             />
-            <section className="panel">
-              {sectionTitle("بيانات النماذج", "Form details")}
-              <div className="school-identity">
-                {schoolIdentity.school}
-                <span>{schoolIdentity.year}</span>
-              </div>
-              <div className="fields">
-                {[["supervisor", "اسم المشرف", "Supervisor"]].map(
-                  ([key, ar, english]) => (
-                    <Field
-                      lang={data.lang}
-                      key={key}
-                      field={{ key, ar, en: english }}
-                      value={data.profile[key]}
-                      onChange={(v) => setData((d) => withSupervisor(d, v))}
-                    />
-                  ),
-                )}
-              </div>
-              <Field
-                lang={data.lang}
-                field={{
-                  key: "grade",
-                  ar: "الصف المسؤول عنه",
-                  en: "Assigned grade",
-                  kind: "select",
-                  options: grades,
-                }}
-                value={data.profile.grade || ""}
-                disabled={Boolean(connected)}
-                onChange={(grade) =>
-                  setData((d) => ({ ...d, profile: { ...d.profile, grade } }))
-                }
-              />
-              <div className="settings-save">
-                <button className="button primary" onClick={saveSettings}>
-                  {t("حفظ الإعدادات", "Save settings")}
-                </button>
-                <span className="small-status" role="status">
-                  {storageError
-                    ? t(
-                        "لم تُحفظ التغييرات على الجهاز",
-                        "Changes are not saved on this device",
-                      )
-                    : data.profile.supervisor.trim()
-                      ? t(
-                          "الاسم محفوظ على هذا الجهاز",
-                          "Name saved on this device",
-                        )
-                      : t("لم يُضف اسم المشرف", "Supervisor name not entered")}
-                </span>
-              </div>
-            </section>
-            <section className="panel">
-              {sectionTitle("قائمة الطلبة", "Student roster")}
-              {data.roster ? (
-                <div className="roster-info">
-                  <strong>{rosterGrades(data.roster).join("، ")}</strong>
-                  <span>
-                    {arDigits(data.roster.students.length)}{" "}
-                    {t("طالبًا", "students")} ·{" "}
-                    {arDigits(rosterClasses(data.roster).length)}{" "}
-                    {t("شعب", "classes")}
-                  </span>
-                </div>
-              ) : (
-                <p className="settings-note">
-                  {t("لم تُحمّل قائمة طلبة", "No student roster loaded")}
-                </p>
-              )}
-              <div className="backup-buttons">
-                <button
-                  className="button"
-                  disabled={!writeAllowed}
-                  onClick={() => rosterRef.current.click()}
-                >
-                  {data.roster
-                    ? t("تحديث قائمة الطلبة", "Update roster")
-                    : t("تحميل قائمة الطلبة", "Load roster")}
-                </button>
-                {data.roster && (
-                  <button
-                    className="button"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          t(
-                            "إزالة قائمة الطلبة من هذا الجهاز؟ تبقى الأسماء في السجلات والمسودات.",
-                            "Remove this device's roster? Names in records and drafts remain.",
-                          ),
-                        )
-                      )
-                        setData((d) => ({ ...d, roster: null }));
-                    }}
-                  >
-                    {t("إزالة القائمة", "Remove roster")}
-                  </button>
-                )}
-              </div>
-              <p className="settings-note">
-                {t(
-                  "تُحفظ القائمة في هذا المتصفح وتُضمّن في النسخة الاحتياطية.",
-                  "The roster stays in this browser and is included in backups.",
-                )}
-              </p>
-              <input
-                hidden
-                ref={rosterRef}
-                aria-label="ملف قائمة الطلبة"
-                type="file"
-                accept=".json,application/json"
-                onChange={importRoster}
-              />
-            </section>
-            <section className="panel">
-              {sectionTitle("نسخ البيانات", "Data backup")}
-              {!writeAllowed && (
-                <button
-                  className="button"
-                  onClick={async () => {
-                    if (
-                      confirm(
-                        t(
-                          "تنزيل البيانات الحالية وبدء سجل فارغ؟",
-                          "Download current data and start an empty register?",
-                        ),
-                      )
-                    ) {
-                      if ((await backup()) && setData(emptyStore(), true)) {
-                        setWriteAllowed(true);
-                      }
-                    }
-                  }}
-                >
+            {readOnlyConnection && (
+              <section className="panel">
+                <p>
                   {t(
-                    "تنزيل البيانات وإعادة التهيئة",
-                    "Download data and reset",
+                    "مساحة الإشراف العام للعرض والمتابعة. اللغة متاحة من أعلى الصفحة.",
+                    "This workspace provides read access to received reports and student history. Change language at the top of the page.",
                   )}
-                </button>
-              )}
-              <div className="backup-buttons">
-                <button className="button" onClick={backup}>
-                  {connected
-                    ? t(
-                        "تنزيل النسخة وإرسالها للإشراف العام",
-                        "Download & send backup",
-                      )
-                    : t("تنزيل نسخة احتياطية", "Download backup")}
-                </button>
-                <button
-                  className="button"
-                  disabled={!writeAllowed}
-                  onClick={() => restoreRef.current.click()}
-                >
-                  {t("استعادة نسخة", "Restore backup")}
-                </button>
-              </div>
-              <p className="settings-note">
-                {t(
-                  connected
-                    ? "عند التنزيل تُرسل نسخة كاملة إلى وارد الإشراف العام: المسودات والمحفوظات وقائمة الطلبة والإعدادات. عند انقطاع الاتصال تبقى بانتظار الإرسال. تفعيل الجهاز لا ينتقل مع الملف."
-                    : "المسودات والمحفوظات خاصة بهذا المتصفح. حذف بيانات المتصفح يحذفها.",
-                  connected
-                    ? "Downloading also sends a full copy to general supervision: drafts, saved forms, roster and settings. Offline copies wait for delivery. Device activation is not included."
-                    : "Drafts and saved forms belong to this browser. Clearing browser data removes them.",
-                )}
-              </p>
-              <input
-                hidden
-                ref={restoreRef}
-                aria-label="ملف النسخة الاحتياطية"
-                type="file"
-                accept=".json,application/json"
-                onChange={restore}
-              />
-            </section>
-            <details className="panel optional">
-              <summary>{t("ملفات ونماذج أخرى", "Other files & forms")}</summary>
-              <a
-                className="templates"
-                href="./نماذج-الإشراف-المبسطة.xlsx"
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-              >
-                {t("نموذج Excel", "Excel template")}
-              </a>
-              <a
-                className="templates"
-                href="./School-Supervision-Word-Forms.zip"
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-              >
-                {t("قوالب Word", "Word templates")}
-              </a>
-              {Object.entries(data.drafts)
-                .filter(([k]) => k === "cases")
-                .map(([k]) => (
-                  <button
-                    className="button"
-                    key={k}
-                    onClick={() => openKind(k)}
+                </p>
+              </section>
+            )}
+            {!readOnlyConnection && (
+              <>
+                <section className="panel">
+                  {sectionTitle("بيانات النماذج", "Form details")}
+                  <div className="school-identity">
+                    {schoolIdentity.school}
+                    <span>{schoolIdentity.year}</span>
+                  </div>
+                  <div className="fields">
+                    {[["supervisor", "اسم المشرف", "Supervisor"]].map(
+                      ([key, ar, english]) => (
+                        <Field
+                          lang={data.lang}
+                          key={key}
+                          field={{ key, ar, en: english }}
+                          value={data.profile[key]}
+                          onChange={(v) => setData((d) => withSupervisor(d, v))}
+                        />
+                      ),
+                    )}
+                  </div>
+                  <Field
+                    lang={data.lang}
+                    field={{
+                      key: "grade",
+                      ar: "الصف المسؤول عنه",
+                      en: "Assigned grade",
+                      kind: "select",
+                      options: grades,
+                    }}
+                    value={data.profile.grade || ""}
+                    disabled={Boolean(connected)}
+                    onChange={(grade) =>
+                      setData((d) => ({
+                        ...d,
+                        profile: { ...d.profile, grade },
+                      }))
+                    }
+                  />
+                  <div className="settings-save">
+                    <button className="button primary" onClick={saveSettings}>
+                      {t("حفظ الإعدادات", "Save settings")}
+                    </button>
+                    <span className="small-status" role="status">
+                      {storageError
+                        ? t(
+                            "لم تُحفظ التغييرات على الجهاز",
+                            "Changes are not saved on this device",
+                          )
+                        : data.profile.supervisor.trim()
+                          ? t(
+                              "الاسم محفوظ على هذا الجهاز",
+                              "Name saved on this device",
+                            )
+                          : t(
+                              "لم يُضف اسم المشرف",
+                              "Supervisor name not entered",
+                            )}
+                    </span>
+                  </div>
+                </section>
+                <section className="panel">
+                  {sectionTitle("قائمة الطلبة", "Student roster")}
+                  {data.roster ? (
+                    <div className="roster-info">
+                      <strong>{rosterGrades(data.roster).join("، ")}</strong>
+                      <span>
+                        {arDigits(data.roster.students.length)}{" "}
+                        {t("طالبًا", "students")} ·{" "}
+                        {arDigits(rosterClasses(data.roster).length)}{" "}
+                        {t("شعب", "classes")}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="settings-note">
+                      {t("لم تُحمّل قائمة طلبة", "No student roster loaded")}
+                    </p>
+                  )}
+                  <div className="backup-buttons">
+                    <button
+                      className="button"
+                      disabled={!writeAllowed}
+                      onClick={() => rosterRef.current.click()}
+                    >
+                      {data.roster
+                        ? t("تحديث قائمة الطلبة", "Update roster")
+                        : t("تحميل قائمة الطلبة", "Load roster")}
+                    </button>
+                    {data.roster && (
+                      <button
+                        className="button"
+                        onClick={() => {
+                          if (
+                            confirm(
+                              t(
+                                "إزالة قائمة الطلبة من هذا الجهاز؟ تبقى الأسماء في السجلات والمسودات.",
+                                "Remove this device's roster? Names in records and drafts remain.",
+                              ),
+                            )
+                          )
+                            setData((d) => ({ ...d, roster: null }));
+                        }}
+                      >
+                        {t("إزالة القائمة", "Remove roster")}
+                      </button>
+                    )}
+                  </div>
+                  <p className="settings-note">
+                    {t(
+                      "تُحفظ القائمة في هذا المتصفح وتُضمّن في النسخة الاحتياطية.",
+                      "The roster stays in this browser and is included in backups.",
+                    )}
+                  </p>
+                  <input
+                    hidden
+                    ref={rosterRef}
+                    aria-label="ملف قائمة الطلبة"
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={importRoster}
+                  />
+                </section>
+                <section className="panel">
+                  {sectionTitle("نسخ البيانات", "Data backup")}
+                  {!writeAllowed && (
+                    <button
+                      className="button"
+                      onClick={async () => {
+                        if (
+                          confirm(
+                            t(
+                              "تنزيل البيانات الحالية وبدء سجل فارغ؟",
+                              "Download current data and start an empty register?",
+                            ),
+                          )
+                        ) {
+                          if ((await backup()) && setData(emptyStore(), true)) {
+                            setWriteAllowed(true);
+                          }
+                        }
+                      }}
+                    >
+                      {t(
+                        "تنزيل البيانات وإعادة التهيئة",
+                        "Download data and reset",
+                      )}
+                    </button>
+                  )}
+                  <div className="backup-buttons">
+                    <button className="button" onClick={backup}>
+                      {connected
+                        ? t(
+                            "تنزيل النسخة وإرسالها للإشراف العام",
+                            "Download & send backup",
+                          )
+                        : t("تنزيل نسخة احتياطية", "Download backup")}
+                    </button>
+                    <button
+                      className="button"
+                      disabled={!writeAllowed}
+                      onClick={() => restoreRef.current.click()}
+                    >
+                      {t("استعادة نسخة", "Restore backup")}
+                    </button>
+                  </div>
+                  <p className="settings-note">
+                    {t(
+                      connected
+                        ? "عند التنزيل تُرسل نسخة كاملة إلى وارد الإشراف العام: المسودات والمحفوظات وقائمة الطلبة والإعدادات. عند انقطاع الاتصال تبقى بانتظار الإرسال. تفعيل الجهاز لا ينتقل مع الملف."
+                        : "المسودات والمحفوظات خاصة بهذا المتصفح. حذف بيانات المتصفح يحذفها.",
+                      connected
+                        ? "Downloading also sends a full copy to general supervision: drafts, saved forms, roster and settings. Offline copies wait for delivery. Device activation is not included."
+                        : "Drafts and saved forms belong to this browser. Clearing browser data removes them.",
+                    )}
+                  </p>
+                  <input
+                    hidden
+                    ref={restoreRef}
+                    aria-label="ملف النسخة الاحتياطية"
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={restore}
+                  />
+                </section>
+                <details className="panel optional">
+                  <summary>
+                    {t("ملفات ونماذج أخرى", "Other files & forms")}
+                  </summary>
+                  <a
+                    className="templates"
+                    href="./نماذج-الإشراف-المبسطة.xlsx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
                   >
-                    {titles[k][en ? 1 : 0]}
-                  </button>
-                ))}
-            </details>
+                    {t("نموذج Excel", "Excel template")}
+                  </a>
+                  <a
+                    className="templates"
+                    href="./School-Supervision-Word-Forms.zip"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                  >
+                    {t("قوالب Word", "Word templates")}
+                  </a>
+                  {Object.entries(data.drafts)
+                    .filter(([k]) => k === "cases")
+                    .map(([k]) => (
+                      <button
+                        className="button"
+                        key={k}
+                        onClick={() => openKind(k)}
+                      >
+                        {titles[k][en ? 1 : 0]}
+                      </button>
+                    ))}
+                </details>
+              </>
+            )}
             <section className="panel">
               {sectionTitle("اختصار على الهاتف", "Phone shortcut")}
               <p className="settings-note">

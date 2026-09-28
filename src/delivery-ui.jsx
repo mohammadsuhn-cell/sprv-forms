@@ -111,49 +111,56 @@ export function DeliveryPanel({
               ? t("مشرف عام · قراءة فقط", "General supervisor · read only")
               : delivery.connection.supervisor.grade}
           </p>
-          <p role="status">
-            {delivery.blocked
-              ? t("سجلات تحتاج مراجعة", "Records need review")
-              : delivery.pending
-                ? t("بانتظار الإرسال", "Awaiting delivery")
-                : t("لا توجد سجلات بانتظار الإرسال", "No pending records")}{" "}
-            · {delivery.pending}
-          </p>
-          <div className="backup-buttons">
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => run(() => delivery.retry())}
-            >
-              {t("إعادة محاولة الإرسال", "Retry delivery")}
-            </button>
-            {existingCount > 0 && (
-              <button
-                className="button"
-                disabled={busy}
-                onClick={onShareExisting}
-              >
-                {t("إرسال المحفوظات السابقة", "Send earlier saved forms")} (
-                {existingCount})
-              </button>
-            )}
-          </div>
-          {delivery.records
-            .filter((r) => r.blocked)
-            .map((r) => (
-              <p className="alert" key={r.formId}>
-                {r.error}
+          {delivery.connection.supervisor.role !== "general" && (
+            <>
+              <p role="status">
+                {delivery.blocked
+                  ? t("سجلات تحتاج مراجعة", "Records need review")
+                  : delivery.pending
+                    ? t("بانتظار الإرسال", "Awaiting delivery")
+                    : t(
+                        "لا توجد سجلات بانتظار الإرسال",
+                        "No pending records",
+                      )}{" "}
+                · {delivery.pending}
               </p>
-            ))}
-          {(delivery.backups || []).slice(0, 5).map((backup) => (
-            <p className="backup-delivery" role="status" key={backup.id}>
-              {t("نسخة احتياطية", "Backup")} ·{" "}
-              {new Date(backup.createdAt).toLocaleString()} ·{" "}
-              {backup.pending
-                ? backup.error || t("بانتظار الإرسال", "Awaiting delivery")
-                : t("تم الاستلام", "Received")}
-            </p>
-          ))}
+              <div className="backup-buttons">
+                <button
+                  className="button"
+                  disabled={busy}
+                  onClick={() => run(() => delivery.retry())}
+                >
+                  {t("إعادة محاولة الإرسال", "Retry delivery")}
+                </button>
+                {existingCount > 0 && (
+                  <button
+                    className="button"
+                    disabled={busy}
+                    onClick={onShareExisting}
+                  >
+                    {t("إرسال المحفوظات السابقة", "Send earlier saved forms")} (
+                    {existingCount})
+                  </button>
+                )}
+              </div>
+              {delivery.records
+                .filter((r) => r.blocked)
+                .map((r) => (
+                  <p className="alert" key={r.formId}>
+                    {r.error}
+                  </p>
+                ))}
+              {(delivery.backups || []).slice(0, 5).map((backup) => (
+                <p className="backup-delivery" role="status" key={backup.id}>
+                  {t("نسخة احتياطية", "Backup")} ·{" "}
+                  {new Date(backup.createdAt).toLocaleString()} ·{" "}
+                  {backup.pending
+                    ? backup.error || t("بانتظار الإرسال", "Awaiting delivery")
+                    : t("تم الاستلام", "Received")}
+                </p>
+              ))}
+            </>
+          )}
         </>
       ) : (
         <>
