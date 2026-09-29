@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { readStudentData } from "./delivery.js";
+import { useReads } from "./read-context.jsx";
 import { dateLabel } from "./model.js";
 import { FileActions } from "./file-actions.jsx";
 import {
@@ -53,6 +53,7 @@ export function readError(error, t) {
 
 // Ignore responses from earlier searches, students, filters, or unmounted pages.
 function useHistoryPage(action, params, listKey) {
+  const { student: readStudentData } = useReads();
   const [state, setState] = useState({ data: null, busy: true, error: null });
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
@@ -81,7 +82,7 @@ function useHistoryPage(action, params, listKey) {
       clearTimeout(timer);
       generation.current++;
     };
-  }, [action, key, refresh]);
+  }, [action, key, refresh, readStudentData]);
   async function more() {
     if (pending.current || state.data?.nextOffset == null) return;
     const version = generation.current;
@@ -257,6 +258,7 @@ export function ReportContent({ report }) {
 }
 
 function HistoryExports({ studentId, record, lang, t }) {
+  const { student: readStudentData } = useReads();
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState(null);
   const [error, setError] = useState(null);
@@ -402,6 +404,7 @@ function HistoryExports({ studentId, record, lang, t }) {
 }
 
 function HistoryEntry({ record, studentId, t, formatDate, lang }) {
+  const { student: readStudentData } = useReads();
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);

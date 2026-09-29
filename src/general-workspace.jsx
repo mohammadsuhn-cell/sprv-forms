@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { readGeneralData } from "./delivery.js";
+import { useReads } from "./read-context.jsx";
+import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
 import {
   ReportContent,
   StudentDirectory,
@@ -47,6 +48,7 @@ const errorText = (error, t) =>
 // Preserve successful data on retry, discard it on a changed query, and ignore
 // responses from old filters or a disconnected/unmounted workspace.
 function useGeneralPage(action, params, enabled = true) {
+  const { general: readGeneralData } = useReads();
   const key = JSON.stringify(params),
     [refresh, setRefresh] = useState(0);
   const [state, setState] = useState({
@@ -95,7 +97,7 @@ function useGeneralPage(action, params, enabled = true) {
     return () => {
       generation.current++;
     };
-  }, [action, key, refresh, enabled]);
+  }, [action, key, refresh, enabled, readGeneralData]);
   async function more() {
     if (pending.current || !state.data?.nextCursor) return;
     const version = generation.current;
@@ -592,7 +594,15 @@ function ReceivedReport({
   );
 }
 
-export function GeneralWorkspace({ connection, lang, t }) {
+export function GeneralWorkspace(props) {
+  return (
+    <SchoolSnapshotWorkspace {...props}>
+      <GeneralWorkspaceView {...props} />
+    </SchoolSnapshotWorkspace>
+  );
+}
+function GeneralWorkspaceView({ connection, lang, t }) {
+  const { local } = useReads();
   const [tab, setTab] = useState("overview"),
     [scope, setScope] = useState({ period: "today", grade: "" });
   const [view, setView] = useState(""),
@@ -656,13 +666,15 @@ export function GeneralWorkspace({ connection, lang, t }) {
               {connection.supervisor.name} · {schoolIdentity.school}
             </p>
           </div>
-          <button
-            className="button"
-            onClick={refresh}
-            disabled={tab !== "students" && overview.busy}
-          >
-            {t("تحديث", "Refresh")}
-          </button>
+          {!local && (
+            <button
+              className="button"
+              onClick={refresh}
+              disabled={tab !== "students" && overview.busy}
+            >
+              {t("تحديث", "Refresh")}
+            </button>
+          )}
         </div>
         <nav
           className="general-tabs"

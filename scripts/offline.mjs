@@ -8,7 +8,8 @@ const walk = (dir) =>
       e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)],
     );
 const files = walk("dist")
-  .filter((p) => !p.endsWith("sw.js"))
+  // Hosting marker files are not fetchable app assets (for example .nojekyll).
+  .filter((p) => !p.endsWith("sw.js") && !path.basename(p).startsWith("."))
   .map((p) => "./" + p.slice(5));
 const version = files
   .reduce(

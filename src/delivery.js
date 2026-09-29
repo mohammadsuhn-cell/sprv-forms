@@ -529,3 +529,78 @@ export async function deliveryState() {
       })),
   };
 }
+
+// General-supervisor snapshots live separately from drafts, submissions and keys.
+const snapshotAccount = (c) => {
+  if (c?.supervisor?.role !== "general")
+    throw Object.assign(Error("General supervisor required"), {
+      code: "snapshot_scope",
+    });
+  return `${c.serverId}:${c.supervisor.id}`;
+};
+const assertSnapshotConnection = (current, expected) => {
+  if (
+    !current ||
+    snapshotAccount(current) !== snapshotAccount(expected) ||
+    current.deviceId !== expected.deviceId ||
+    current.endpoint !== expected.endpoint
+  )
+    throw Object.assign(Error("Connection changed"), { code: "unpaired" });
+};
+export const readSchoolSnapshotPage = (params = {}) =>
+  signedRead("school-snapshot", params);
+export async function readSavedSchoolSnapshot(expected) {
+  return transaction("settings", "readonly", async (store) => {
+    const current = await request(store.get("connection"));
+    assertSnapshotConnection(current, expected);
+    if (await request(store.get(`snapshot-blocked:${current.deviceId}`)))
+      throw Object.assign(Error("Device revoked"), {
+        code: "revoked",
+        status: 401,
+      });
+    return request(store.get(`school-snapshot:${snapshotAccount(current)}`));
+  });
+}
+export async function saveSchoolSnapshot(
+  bundle,
+  expected,
+  fromReceiver = false,
+) {
+  return transaction("settings", "readwrite", async (store) => {
+    const current = await request(store.get("connection"));
+    assertSnapshotConnection(current, expected);
+    if (
+      `${bundle.payload.serverId}:${bundle.payload.supervisorId}` !==
+      snapshotAccount(current)
+    )
+      throw Object.assign(Error("Snapshot owner differs"), {
+        code: "snapshot_owner",
+      });
+    if (
+      !fromReceiver &&
+      (await request(store.get(`snapshot-blocked:${current.deviceId}`)))
+    )
+      throw Object.assign(Error("Device revoked"), {
+        code: "revoked",
+        status: 401,
+      });
+    const key = `school-snapshot:${snapshotAccount(current)}`;
+    const previous = await request(store.get(key));
+    if (
+      fromReceiver &&
+      previous?.payload.capturedAt > bundle.payload.capturedAt
+    )
+      throw Object.assign(Error("Older snapshot"), { code: "snapshot_older" });
+    await request(store.put(bundle, key));
+    if (fromReceiver)
+      await request(store.delete(`snapshot-blocked:${current.deviceId}`));
+  });
+}
+export async function blockSchoolSnapshot(expected) {
+  return transaction("settings", "readwrite", async (store) => {
+    const current = await request(store.get("connection"));
+    assertSnapshotConnection(current, expected);
+    await request(store.put(true, `snapshot-blocked:${current.deviceId}`));
+    await request(store.delete(`school-snapshot:${snapshotAccount(current)}`));
+  });
+}

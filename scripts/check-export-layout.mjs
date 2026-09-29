@@ -11,6 +11,7 @@ import { withCaseParticipants } from "../src/case-students.js";
 const long = newForm("case", { supervisor: "مشرف تجريبي" });
 long.student = "طالب تجريبي";
 long.className = "٧/٢";
+long.receiverReference = "CASE-2026-000123";
 const tokens = Array.from(
   { length: 110 },
   (_, i) => `S${String(i).padStart(3, "0")}`,

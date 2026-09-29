@@ -181,3 +181,32 @@
     padding-inline: 8px;
   }
 }
+.school-snapshot-tools {
+  margin-block: 16px 24px;
+  border-inline-start: 4px solid #719c86;
+}
+.school-snapshot-tools .history-actions {
+  flex-wrap: wrap;
+}
+.snapshot-restore-label {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.snapshot-restore-label input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+.snapshot-restore-label:focus-within {
+  outline: 3px solid #78a08a;
+  outline-offset: 3px;
+}
+.snapshot-restore-preview {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
