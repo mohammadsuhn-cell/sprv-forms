@@ -8,7 +8,7 @@ import {
   readError,
 } from "./student-history.jsx";
 import { titles, dateLabel, schoolIdentity, today } from "./model.js";
-import { FileActions } from "./file-actions.jsx";
+import { ExportPanels } from "./export-panels.jsx";
 import { historyFileName } from "./history-export.js";
 import "./general-workspace.css";
 import { useWorkspaceNavigation } from "./workspace-navigation.js";
@@ -207,7 +207,11 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
         )}
       </button>
       {!!record.students.length && (
-        <div className="general-student-links">
+        <details className="general-student-links">
+          <summary>
+            {record.students.length}{" "}
+            {t("طالب · عرض الأسماء", "students · Show names")}
+          </summary>
           {record.students.map((student) => (
             <button
               className="text-control"
@@ -217,7 +221,7 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
               {student.name} · {student.className}
             </button>
           ))}
-        </div>
+        </details>
       )}
       {!!record.unresolved.length && (
         <span className="hint">
@@ -226,6 +230,86 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
         </span>
       )}
     </article>
+  );
+}
+
+function LateClass({
+  group,
+  snapshot,
+  lang,
+  t,
+  onStudent,
+  onReport,
+  onRefresh,
+}) {
+  const [open, setOpen] = useState(false);
+  const page = useGeneralPage(
+    "overview-details",
+    { snapshotId: snapshot.snapshotId, view: "late", lateGroup: group.id },
+    open,
+  );
+  return (
+    <details
+      className="late-class"
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>
+        <strong>{group.className}</strong>
+        <span>
+          {group.students} {t("طالب", "students")} · {group.lateDays}{" "}
+          {t("أيام تأخر", "late days")}
+        </span>
+      </summary>
+      {open && (
+        <>
+          <Status page={page} t={t} onRefresh={onRefresh} />
+          {page.data?.items.map((entry) => (
+            <article
+              className="general-detail-row late-student-row"
+              key={entry.id}
+            >
+              <div className="late-student-heading">
+                <button
+                  className="history-student"
+                  onClick={() => onStudent(entry.id)}
+                >
+                  {entry.name}
+                </button>
+                <span>
+                  {entry.lateDays} {t("أيام", "days")} ·{" "}
+                  {t("آخر تأخر", "Latest")}:{" "}
+                  {labelDate(entry.days[0].date, lang)}
+                </span>
+              </div>
+              <details>
+                <summary>{t("الأيام والتقارير", "Dates & reports")}</summary>
+                {entry.days.map((day) => (
+                  <div key={day.date}>
+                    <strong>{labelDate(day.date, lang)}</strong>
+                    {day.reports.map((record) => (
+                      <button
+                        className="text-control"
+                        key={record.id}
+                        onClick={() => onReport(record)}
+                      >
+                        {record.supervisorName} ·{" "}
+                        {t("فتح التقرير", "Open report")}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </details>
+            </article>
+          ))}
+          {page.data?.nextCursor && (
+            <button className="button" disabled={page.busy} onClick={page.more}>
+              {t("عرض المزيد", "Show more")} ({page.data.items.length} /{" "}
+              {page.data.total})
+            </button>
+          )}
+        </>
+      )}
+    </details>
   );
 }
 
@@ -243,6 +327,7 @@ function Drilldown({
     view === "reports" ? "received-reports" : "overview-details",
     {
       snapshotId: snapshot.snapshotId,
+      ...(view === "late" ? { groupBy: "class" } : {}),
       ...(view === "reports" ? filters : { view }),
     },
   );
@@ -266,7 +351,10 @@ function Drilldown({
       {page.data && (
         <>
           <p className="hint">
-            {t("عدد النتائج", "Results")}: {page.data.total}
+            {view === "late"
+              ? t("عدد الشعب", "Classes")
+              : t("عدد النتائج", "Results")}
+            : {page.data.total}
           </p>
           {!page.data.total && (
             <div className="panel">
@@ -279,40 +367,18 @@ function Drilldown({
             </div>
           )}
           <div className="panel general-results">
-            {page.data.items.map((entry) =>
+            {page.data.items.map((entry, index) =>
               view === "late" ? (
-                <article className="general-detail-row" key={entry.id}>
-                  <button
-                    className="history-student"
-                    onClick={() => onStudent(entry.id)}
-                  >
-                    <strong>{entry.name}</strong>
-                    <span>{entry.className}</span>
-                  </button>
-                  <span>
-                    {entry.lateDays} {t("أيام تأخر", "late days")}
-                  </span>
-                  <details>
-                    <summary>
-                      {t("الأيام والتقارير", "Dates & reports")}
-                    </summary>
-                    {entry.days.map((day) => (
-                      <div key={day.date}>
-                        <strong>{labelDate(day.date, lang)}</strong>
-                        {day.reports.map((record) => (
-                          <button
-                            className="text-control"
-                            key={record.id}
-                            onClick={() => onReport(record)}
-                          >
-                            {record.supervisorName} ·{" "}
-                            {t("فتح التقرير", "Open report")}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </details>
-                </article>
+                <LateClass
+                  key={entry.id}
+                  group={entry}
+                  snapshot={snapshot}
+                  lang={lang}
+                  t={t}
+                  onReport={onReport}
+                  onStudent={onStudent}
+                  onRefresh={onRefresh}
+                />
               ) : view === "absence" ? (
                 <article className="general-detail-row" key={entry.id}>
                   <h3>
@@ -384,14 +450,27 @@ function Drilldown({
                   </button>
                 </article>
               ) : (
-                <ReportRow
-                  key={entry.id}
-                  record={entry}
-                  lang={lang}
-                  t={t}
-                  onReport={onReport}
-                  onStudent={onStudent}
-                />
+                <React.Fragment key={entry.id}>
+                  {view === "followups" &&
+                    (index === 0 ||
+                      entry.due < snapshot.scope.today !==
+                        page.data.items[index - 1].due <
+                          snapshot.scope.today) && (
+                      <h3>
+                        {entry.due < snapshot.scope.today
+                          ? t("متأخرة", "Overdue")
+                          : t("مستحقة خلال الفترة", "Due in this period")}
+                      </h3>
+                    )}
+                  <ReportRow
+                    key={entry.id}
+                    record={entry}
+                    lang={lang}
+                    t={t}
+                    onReport={onReport}
+                    onStudent={onStudent}
+                  />
+                </React.Fragment>
               ),
             )}
           </div>
@@ -407,7 +486,7 @@ function Drilldown({
   );
 }
 
-function ReceivedExports({ detail, lang, t }) {
+function ReceivedExports({ detail, lang, t, children }) {
   const [busy, setBusy] = useState(false),
     [file, setFile] = useState(null),
     [error, setError] = useState("");
@@ -477,45 +556,26 @@ function ReceivedExports({ detail, lang, t }) {
     }
   }
   return (
-    <div className="history-export">
-      <strong>
-        {t(
-          detail.kind === "cases"
-            ? "تصدير السجل الأصلي الكامل"
-            : "تصدير التقرير",
-          detail.kind === "cases"
-            ? "Export the full original register"
-            : "Export report",
-        )}
-      </strong>
-      <div className="history-actions">
-        {(detail.kind === "absence" ? ["pdf"] : ["pdf", "docx", "xlsx"]).map(
-          (extension) => (
-            <button
-              className="button"
-              key={extension}
-              disabled={busy}
-              onClick={() => prepare(extension)}
-            >
-              {extension === "docx" ? "Word" : extension.toUpperCase()}
-            </button>
-          ),
-        )}
-      </div>
-      {busy && (
-        <p role="status">{t("جارٍ تجهيز الملف…", "Preparing document…")}</p>
+    <ExportPanels
+      title={t(
+        detail.kind === "cases" ? "تصدير السجل الأصلي الكامل" : "تصدير التقرير",
+        detail.kind === "cases"
+          ? "Export the full original register"
+          : "Export report",
       )}
-      {error && <p role="alert">{error}</p>}
-      {file && (
-        <FileActions
-          file={file}
-          lang={lang}
-          onShare={share}
-          onClose={() => setFile(null)}
-          onError={setError}
-        />
-      )}
-    </div>
+      formats={detail.kind === "absence" ? ["pdf"] : ["pdf", "docx", "xlsx"]}
+      busy={busy}
+      error={error}
+      file={file}
+      lang={lang}
+      t={t}
+      onPrepare={prepare}
+      onShare={share}
+      onClose={() => setFile(null)}
+      onError={setError}
+    >
+      {children}
+    </ExportPanels>
   );
 }
 
@@ -565,30 +625,40 @@ function ReceivedReport({
             {t("وقت الاستلام", "Received at")}:{" "}
             {stamp(page.data.receivedAt, lang)}
           </p>
-          <ReportContent report={page.data.report} />
-          <div className="general-student-links">
-            {[
-              ...new Map(
-                page.data.students
-                  .filter((entry) => entry.localStudent)
-                  .map(({ localStudent }) => [localStudent.id, localStudent]),
-              ).values(),
-            ].map((student) => (
-              <button
-                className="button"
-                key={student.id}
-                onClick={() => onStudent(student.id)}
-              >
-                {t("سجل الطالب", "Student history")}: {student.name}
-              </button>
-            ))}
-          </div>
           <ReceivedExports
             key={page.data.revision}
             detail={page.data}
             lang={lang}
             t={t}
-          />
+          >
+            <ReportContent
+              report={page.data.report}
+              students={page.data.students
+                .filter((s) => s.localStudent)
+                .map((s) => s.localStudent)}
+              onStudent={onStudent}
+            />
+            <details className="general-student-links">
+              <summary>
+                {t("الطلبة في التقرير", "Students in this report")}
+              </summary>
+              {[
+                ...new Map(
+                  page.data.students
+                    .filter((s) => s.localStudent)
+                    .map(({ localStudent }) => [localStudent.id, localStudent]),
+                ).values(),
+              ].map((student) => (
+                <button
+                  className="text-control"
+                  key={student.id}
+                  onClick={() => onStudent(student.id)}
+                >
+                  {student.name} · {student.className}
+                </button>
+              ))}
+            </details>
+          </ReceivedExports>
         </>
       )}
     </section>
@@ -861,8 +931,6 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
               {snapshot.scope.start
                 ? `${labelDate(snapshot.scope.start, lang)} — ${labelDate(snapshot.scope.end, lang)}`
                 : t("كل التواريخ", "All dates")}{" "}
-              · {t("آخر تحديث ناجح", "Last successful refresh")}:{" "}
-              {stamp(snapshot.fetchedAt, lang)}
             </p>
           )}
           {tab === "reports" && (filters.kind || filters.supervisorId) && (
@@ -1052,9 +1120,6 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
             </div>
             {view && (
               <>
-                <button className="back" onClick={back}>
-                  {t("العودة إلى النظرة العامة", "Back to overview")}
-                </button>
                 <Drilldown
                   key={snapshot.snapshotId + view}
                   view={view}

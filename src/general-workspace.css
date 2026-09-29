@@ -219,3 +219,201 @@
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 0.75rem;
 }
+.content.general-content {
+  max-width: 1180px;
+  padding-top: 16px;
+}
+.general-content .school-snapshot-tools {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+}
+.snapshot-status-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.snapshot-status-bar > div {
+  flex: 1;
+  min-width: 170px;
+}
+.snapshot-status-bar strong,
+.snapshot-status-bar span {
+  display: block;
+}
+.snapshot-status-bar span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.general-workspace .page-heading {
+  margin: 12px 0;
+}
+.general-workspace .page-heading h1 {
+  font-size: 24px;
+}
+.general-workspace .general-tabs {
+  margin: 12px 0;
+  padding-bottom: 8px;
+}
+.general-workspace .general-filter-panel {
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.general-workspace .general-filter-panel > .field {
+  margin: 0;
+  width: 160px;
+}
+.general-workspace .general-filter-panel > .hint {
+  margin: 0;
+  font-size: 12px;
+}
+.general-workspace .general-advanced {
+  width: auto;
+}
+.general-workspace .general-advanced[open] {
+  width: 100%;
+}
+.general-workspace .general-stats {
+  margin: 16px 0;
+}
+.general-workspace .general-stat {
+  padding: 14px;
+  gap: 4px;
+}
+.general-workspace .general-report-row {
+  padding: 10px 0;
+}
+.general-workspace .general-student-links {
+  margin: 4px 0;
+  font-size: 14px;
+}
+.general-student-links summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.late-class {
+  border-bottom: 1px solid var(--line);
+}
+.late-class > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  cursor: pointer;
+  padding: 10px;
+}
+.late-class > summary::before {
+  content: "▸";
+}
+.late-class[open] > summary::before {
+  content: "▾";
+}
+.late-class > summary strong {
+  flex: 1;
+}
+.late-class > summary span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.late-student-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.late-student-heading span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.general-workspace .late-student-row {
+  padding: 8px 10px;
+}
+.general-workspace .late-student-row .history-student {
+  padding: 0;
+  border: 0;
+  min-height: 32px;
+  width: auto;
+  background: none;
+}
+.general-workspace .late-student-row details {
+  margin: 0;
+}
+.general-workspace .late-student-row summary {
+  min-height: 30px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.export-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.export-toolbar .history-actions {
+  margin: 0;
+}
+.history-export[data-position] {
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.report-student-link {
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 560px) {
+  .content.general-content {
+    padding: 12px 12px 48px;
+  }
+  .snapshot-status-bar {
+    gap: 6px;
+  }
+  .snapshot-status-bar > div {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .snapshot-status-bar button {
+    min-height: 36px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .general-content .school-snapshot-tools {
+    padding: 8px 12px;
+  }
+  .general-workspace .page-heading h1 {
+    font-size: 22px;
+  }
+  .general-workspace .page-heading .hint {
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 4px 0 0;
+  }
+  .general-back-bar {
+    padding: 4px 0;
+  }
+  .general-back-bar .button {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
+  .general-workspace .general-periods {
+    gap: 4px;
+  }
+  .general-workspace .general-periods .button {
+    font-size: 12px;
+    padding: 6px 8px;
+    min-height: 36px;
+  }
+  .general-workspace .general-filter-panel > .field {
+    width: 140px;
+  }
+  .late-student-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+}

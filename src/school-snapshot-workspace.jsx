@@ -71,7 +71,15 @@ function message(error, t) {
   );
 }
 
-export function SchoolSnapshotWorkspace({ connection, lang, t, children }) {
+export function SchoolSnapshotWorkspace({
+  connection,
+  lang,
+  t,
+  children,
+  active = true,
+  showSettings = false,
+  onSettings,
+}) {
   const live = useReads();
   const [bundle, setBundle] = useState(null),
     [ready, setReady] = useState(false);
@@ -203,148 +211,185 @@ export function SchoolSnapshotWorkspace({ connection, lang, t, children }) {
   }
   return (
     <>
-      <section
-        className="panel school-snapshot-tools"
-        aria-label={t("نسخة المدرسة", "School snapshot")}
-      >
-        <div>
-          <strong>
-            {bundle
-              ? t(
-                  "نسخة المدرسة محفوظة على هذا الجهاز",
-                  "School snapshot saved on this device",
-                )
-              : t(
-                  "احتفظ بنسخة المدرسة معك",
-                  "Keep a copy of the school records",
-                )}
-          </strong>
-          <p className="hint">
-            {bundle ? (
-              <>
-                {t("آخر تحديث للبيانات", "Data last updated")}:{" "}
-                {formatTime(bundle.payload.capturedAt, lang)} ·{" "}
-                {bundle.payload.students.length} {t("طالب", "students")} ·{" "}
-                {bundle.payload.records.length} {t("تقرير", "reports")}
-                {offline ? " · " + t("دون اتصال", "Offline") : ""}
-              </>
-            ) : (
-              t(
-                "حدّث بيانات المدرسة أثناء اتصال جهاز الاستقبال، ثم تصفح السجلات والتقارير وصدّرها دون اتصال.",
-                "Update while the receiver is online, then browse and export school records offline.",
-              )
-            )}
-          </p>
-          {bundle && (
-            <p className="hint">
-              {t(
-                "تعرض الصفحات النسخة المحفوظة. تحديث بيانات المدرسة يجلب جميع التقارير والتعديلات الجديدة.",
-                "Pages use your saved copy. Update school data to receive all new reports and corrections.",
-              )}
-            </p>
-          )}
-        </div>
-        <div className="history-actions">
-          <button
-            className="primary"
-            disabled={!ready || busy}
-            onClick={update}
-          >
-            {t("تحديث بيانات المدرسة", "Update school data")}
-          </button>
-          <button
-            className="button"
-            disabled={!bundle || busy || blocked}
-            onClick={() =>
-              setFile({
-                name: `sprv-general-${bundle.payload.capturedAt.slice(0, 10)}.json`,
-                blob: new Blob([snapshotBackupText(bundle)], {
-                  type: "application/json",
-                }),
-              })
-            }
-          >
-            {t("تنزيل نسخة احتياطية", "Download backup")}
-          </button>
-          <label className="button snapshot-restore-label">
-            {t("استعادة نسخة احتياطية", "Restore backup")}
-            <input
-              type="file"
-              accept=".json,application/json"
-              disabled={!ready || busy || blocked}
-              aria-label={t("استعادة نسخة احتياطية", "Restore backup")}
-              onChange={(e) => {
-                const selected = e.target.files?.[0];
-                e.target.value = "";
-                inspectBackup(selected);
-              }}
-            />
-          </label>
-        </div>
-        {(!ready || busy) && (
-          <p role="status">
-            {!ready
-              ? t("جارٍ فتح النسخة المحفوظة…", "Opening saved snapshot…")
-              : progress
-                ? `${t("جارٍ تحديث بيانات المدرسة…", "Updating school data…")} ${Math.round((progress.received / progress.total) * 100)}%`
-                : t("جارٍ تجهيز النسخة…", "Preparing snapshot…")}
-          </p>
-        )}
-        {error && <p role="alert">{message(error, t)}</p>}
-        {pendingRestore && (
-          <section
-            className="snapshot-restore-preview"
-            aria-label={t("مراجعة النسخة", "Review backup")}
-          >
-            <p>
-              {t("تاريخ النسخة", "Snapshot date")}:{" "}
-              {formatTime(pendingRestore.payload.capturedAt, lang)} ·{" "}
-              {pendingRestore.payload.students.length} {t("طالب", "students")} ·{" "}
-              {pendingRestore.payload.records.length} {t("تقرير", "reports")}
-            </p>
-            <p>
-              {t(
-                "ستحل هذه النسخة محل نسخة المدرسة المحفوظة على هذا الجهاز.",
-                "This will replace the school snapshot saved on this device.",
-              )}
-            </p>
-            {bundle &&
-              pendingRestore.payload.capturedAt < bundle.payload.capturedAt && (
-                <p className="general-missing">
-                  {t(
-                    "النسخة المختارة أقدم من النسخة المحفوظة.",
-                    "The selected backup is older than your saved snapshot.",
+      {(active || showSettings) && (
+        <section
+          className="panel school-snapshot-tools"
+          aria-label={t("نسخة المدرسة", "School snapshot")}
+        >
+          {active && !showSettings ? (
+            <div className="snapshot-status-bar">
+              <div>
+                <strong>
+                  {bundle
+                    ? t("آخر تحديث", "Last updated")
+                    : t("بيانات المدرسة", "School data")}
+                </strong>
+                <span>
+                  {bundle
+                    ? formatTime(bundle.payload.capturedAt, lang)
+                    : t(
+                        "حدّث للاحتفاظ بنسخة دون اتصال",
+                        "Update to keep an offline copy",
+                      )}
+                  {offline ? ` · ${t("دون اتصال", "Offline")}` : ""}
+                </span>
+              </div>
+              <button
+                className="primary"
+                disabled={!ready || busy}
+                onClick={update}
+              >
+                {t("تحديث بيانات المدرسة", "Update school data")}
+              </button>
+              <button className="text-control" onClick={onSettings}>
+                {t("النسخ الاحتياطية", "Backups")}
+              </button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <strong>
+                  {bundle
+                    ? t(
+                        "نسخة المدرسة محفوظة على هذا الجهاز",
+                        "School snapshot saved on this device",
+                      )
+                    : t(
+                        "احتفظ بنسخة المدرسة معك",
+                        "Keep a copy of the school records",
+                      )}
+                </strong>
+                <p className="hint">
+                  {bundle ? (
+                    <>
+                      {t("آخر تحديث للبيانات", "Data last updated")}:{" "}
+                      {formatTime(bundle.payload.capturedAt, lang)} ·{" "}
+                      {bundle.payload.students.length} {t("طالب", "students")} ·{" "}
+                      {bundle.payload.records.length} {t("تقرير", "reports")}
+                      {offline ? " · " + t("دون اتصال", "Offline") : ""}
+                    </>
+                  ) : (
+                    t(
+                      "حدّث بيانات المدرسة أثناء اتصال جهاز الاستقبال، ثم تصفح السجلات والتقارير وصدّرها دون اتصال.",
+                      "Update while the receiver is online, then browse and export school records offline.",
+                    )
                   )}
                 </p>
-              )}
-            <button className="button" disabled={busy} onClick={restore}>
-              {t("استعادة هذه النسخة", "Restore this snapshot")}
-            </button>{" "}
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => setPendingRestore(null)}
+                {bundle && (
+                  <p className="hint">
+                    {t(
+                      "تعرض الصفحات النسخة المحفوظة. تحديث بيانات المدرسة يجلب جميع التقارير والتعديلات الجديدة.",
+                      "Pages use your saved copy. Update school data to receive all new reports and corrections.",
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="history-actions">
+                <button
+                  className="primary"
+                  disabled={!ready || busy}
+                  onClick={update}
+                >
+                  {t("تحديث بيانات المدرسة", "Update school data")}
+                </button>
+                <button
+                  className="button"
+                  disabled={!bundle || busy || blocked}
+                  onClick={() =>
+                    setFile({
+                      name: `sprv-general-${bundle.payload.capturedAt.slice(0, 10)}.json`,
+                      blob: new Blob([snapshotBackupText(bundle)], {
+                        type: "application/json",
+                      }),
+                    })
+                  }
+                >
+                  {t("تنزيل نسخة احتياطية", "Download backup")}
+                </button>
+                <label className="button snapshot-restore-label">
+                  {t("استعادة نسخة احتياطية", "Restore backup")}
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    disabled={!ready || busy || blocked}
+                    aria-label={t("استعادة نسخة احتياطية", "Restore backup")}
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0];
+                      e.target.value = "";
+                      inspectBackup(selected);
+                    }}
+                  />
+                </label>
+              </div>
+            </>
+          )}
+          {(!ready || busy) && (
+            <p role="status">
+              {!ready
+                ? t("جارٍ فتح النسخة المحفوظة…", "Opening saved snapshot…")
+                : progress
+                  ? `${t("جارٍ تحديث بيانات المدرسة…", "Updating school data…")} ${Math.round((progress.received / progress.total) * 100)}%`
+                  : t("جارٍ تجهيز النسخة…", "Preparing snapshot…")}
+            </p>
+          )}
+          {error && <p role="alert">{message(error, t)}</p>}
+          {pendingRestore && (
+            <section
+              className="snapshot-restore-preview"
+              aria-label={t("مراجعة النسخة", "Review backup")}
             >
-              {t("إلغاء", "Cancel")}
-            </button>
-          </section>
-        )}
-        {file && (
-          <FileActions
-            file={file}
-            lang={lang}
-            onShare={shareBackup}
-            onClose={() => setFile(null)}
-            onError={(value) => setError(Error(value))}
-          />
-        )}
-      </section>
+              <p>
+                {t("تاريخ النسخة", "Snapshot date")}:{" "}
+                {formatTime(pendingRestore.payload.capturedAt, lang)} ·{" "}
+                {pendingRestore.payload.students.length} {t("طالب", "students")}{" "}
+                · {pendingRestore.payload.records.length}{" "}
+                {t("تقرير", "reports")}
+              </p>
+              <p>
+                {t(
+                  "ستحل هذه النسخة محل نسخة المدرسة المحفوظة على هذا الجهاز.",
+                  "This will replace the school snapshot saved on this device.",
+                )}
+              </p>
+              {bundle &&
+                pendingRestore.payload.capturedAt <
+                  bundle.payload.capturedAt && (
+                  <p className="general-missing">
+                    {t(
+                      "النسخة المختارة أقدم من النسخة المحفوظة.",
+                      "The selected backup is older than your saved snapshot.",
+                    )}
+                  </p>
+                )}
+              <button className="button" disabled={busy} onClick={restore}>
+                {t("استعادة هذه النسخة", "Restore this snapshot")}
+              </button>{" "}
+              <button
+                className="button"
+                disabled={busy}
+                onClick={() => setPendingRestore(null)}
+              >
+                {t("إلغاء", "Cancel")}
+              </button>
+            </section>
+          )}
+          {file && (
+            <FileActions
+              file={file}
+              lang={lang}
+              onShare={shareBackup}
+              onClose={() => setFile(null)}
+              onError={(value) => setError(Error(value))}
+            />
+          )}
+        </section>
+      )}
       {ready && !blocked && (
         <ReadContext.Provider
           key={bundle?.payload.snapshotId || "live"}
           value={reader}
         >
-          {children}
+          <div hidden={!active}>{children}</div>
         </ReadContext.Provider>
       )}
     </>

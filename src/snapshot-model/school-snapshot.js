@@ -7,6 +7,7 @@ import {
   receivedKinds,
   scopedForm,
   validDate,
+  lateSelection,
 } from './general-overview.js';
 import {
   studentGrade,
@@ -279,7 +280,9 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
                 (!params.kind || r.kind === params.kind) &&
                 (!params.supervisorId || r.supervisorId === params.supervisorId),
             )
-          : data.lists[params.view];
+          : params.view === 'late'
+            ? lateSelection(data.lists.late, params)
+            : data.lists[params.view];
       if (!items) return fail('invalid');
       return page(
         action,

@@ -790,7 +790,7 @@ function App() {
         </div>
       </header>
       <main
-        className={`${page === "form" ? "content editing" : "content"}${readyFile ? " has-ready-file" : ""}`}
+        className={`${page === "form" ? "content editing" : "content"}${readOnlyConnection && page === "home" ? " general-content" : ""}${readyFile ? " has-ready-file" : ""}`}
       >
         {connected && page === "settings" && (
           <button
@@ -849,15 +849,15 @@ function App() {
           />
         )}
         {readOnlyConnection && (
-          <div hidden={page !== "home"}>
-            <GeneralWorkspace
-              key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
-              connection={connected}
-              lang={data.lang}
-              t={t}
-              active={page === "home"}
-            />
-          </div>
+          <GeneralWorkspace
+            key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
+            connection={connected}
+            lang={data.lang}
+            t={t}
+            active={page === "home"}
+            showSettings={page === "settings"}
+            onSettings={() => setPage("settings")}
+          />
         )}
         {page === "home" && !delivery.ready && (
           <p role="status">{t("جارٍ تحميل الاتصال…", "Loading connection…")}</p>

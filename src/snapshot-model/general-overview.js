@@ -8,6 +8,29 @@ import {
 } from './student-directory.js';
 
 export const receivedKinds = ['case', 'cases', 'late', 'absence', 'daily', 'staffing'];
+// Group the complete frozen list before paging; class counts never depend on
+// how many student rows a browser has already loaded.
+export function lateGroups(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const id = `${row.grade}:${row.className}`;
+    if (!groups.has(id))
+      groups.set(id, { id, grade: row.grade, className: row.className, students: 0, lateDays: 0 });
+    const group = groups.get(id);
+    group.students++;
+    group.lateDays += row.lateDays;
+  }
+  return [...groups.values()].sort(
+    (a, b) =>
+      a.grade.localeCompare(b.grade) ||
+      a.className.localeCompare(b.className, 'ar', { numeric: true }),
+  );
+}
+export function lateSelection(rows, event) {
+  if (event.groupBy === 'class') return lateGroups(rows);
+  if (event.lateGroup) return rows.filter((r) => `${r.grade}:${r.className}` === event.lateGroup);
+  return rows;
+}
 const invalid = () =>
   Object.assign(new Error('تحقق من الفترة والصف'), { status: 400, code: 'invalid' });
 export function validDate(value) {

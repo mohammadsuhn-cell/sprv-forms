@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useReads } from "./read-context.jsx";
 import { dateLabel } from "./model.js";
-import { FileActions } from "./file-actions.jsx";
+import { ExportPanels } from "./export-panels.jsx";
 import {
   loadProfileHistory,
   profileReport,
@@ -148,7 +148,29 @@ function PageStatus({ page, t }) {
   );
 }
 
-export function ReportContent({ report }) {
+export function ReportContent({ report, students = [], onStudent }) {
+  const renderValue = (value) => {
+    const matches = onStudent
+      ? [
+          ...new Map(
+            students
+              .filter((s) => s.name === String(value))
+              .map((s) => [s.id, s]),
+          ).values(),
+        ]
+      : [];
+    const student = matches.length === 1 && matches[0];
+    return student ? (
+      <button
+        className="text-control report-student-link"
+        onClick={() => onStudent(student.id)}
+      >
+        {student.name}
+      </button>
+    ) : (
+      String(value ?? "")
+    );
+  };
   return (
     <div className="history-report" dir="rtl" lang="ar">
       {report.absence && (
@@ -204,7 +226,7 @@ export function ReportContent({ report }) {
         {(report.meta || []).map(([label, value], i) => (
           <React.Fragment key={i}>
             <dt>{label}</dt>
-            <dd>{value}</dd>
+            <dd>{renderValue(value)}</dd>
           </React.Fragment>
         ))}
       </dl>
@@ -215,7 +237,7 @@ export function ReportContent({ report }) {
             {(section.lines || []).map(([label, value], j) => (
               <React.Fragment key={j}>
                 <dt>{label}</dt>
-                <dd>{value}</dd>
+                <dd>{renderValue(value)}</dd>
               </React.Fragment>
             ))}
           </dl>
@@ -244,7 +266,7 @@ export function ReportContent({ report }) {
                 {table.rows.map((row, j) => (
                   <tr key={j}>
                     {row.map((cell, k) => (
-                      <td key={k}>{String(cell ?? "")}</td>
+                      <td key={k}>{renderValue(cell)}</td>
                     ))}
                   </tr>
                 ))}
@@ -257,7 +279,7 @@ export function ReportContent({ report }) {
   );
 }
 
-function HistoryExports({ studentId, record, lang, t }) {
+function HistoryExports({ studentId, record, lang, t, children }) {
   const { student: readStudentData } = useReads();
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState(null);
@@ -358,48 +380,28 @@ function HistoryExports({ studentId, record, lang, t }) {
     ? t("تصدير الحالة", "Export case")
     : t("تصدير سجل الطالب الكامل", "Export full student profile");
   return (
-    <section className="history-export" aria-label={title}>
-      <strong>{title}</strong>
-      {!record && (
-        <p className="hint">
-          {t(
-            "ملخص الحالات وجميع تواريخ التأخر، بما فيها السجلات غير المعروضة بعد.",
-            "Case summaries and every late date, including records not yet displayed.",
-          )}
-        </p>
-      )}
-      <div className="history-actions">
-        {[
-          ["pdf", "PDF"],
-          ["docx", "Word"],
-          ["xlsx", "Excel"],
-        ].map(([extension, label]) => (
-          <button
-            className="button"
-            key={extension}
-            disabled={busy}
-            onClick={() => prepare(extension)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {busy && (
-        <p role="status">
-          {t("جارٍ إعداد الملف الكامل…", "Preparing the complete file…")}
-        </p>
-      )}
-      {error && <p role="alert">{error}</p>}
-      {file && (
-        <FileActions
-          file={file}
-          lang={lang}
-          onShare={share}
-          onClose={() => setFile(null)}
-          onError={setError}
-        />
-      )}
-    </section>
+    <ExportPanels
+      title={title}
+      description={
+        !record
+          ? t(
+              "ملخص الحالات وجميع تواريخ التأخر، بما فيها السجلات غير المعروضة بعد.",
+              "Case summaries and every late date, including records not yet displayed.",
+            )
+          : ""
+      }
+      busy={busy}
+      error={error}
+      file={file}
+      lang={lang}
+      t={t}
+      onPrepare={prepare}
+      onShare={share}
+      onClose={() => setFile(null)}
+      onError={setError}
+    >
+      {children}
+    </ExportPanels>
   );
 }
 
@@ -473,14 +475,13 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
           </button>
         </div>
       )}
-      {detail && <ReportContent report={detail.report} />}
+      {detail && !["case", "cases"].includes(record.kind) && (
+        <ReportContent report={detail.report} />
+      )}
       {detail && ["case", "cases"].includes(record.kind) && (
-        <HistoryExports
-          studentId={studentId}
-          record={record}
-          lang={lang}
-          t={t}
-        />
+        <HistoryExports studentId={studentId} record={record} lang={lang} t={t}>
+          <ReportContent report={detail.report} />
+        </HistoryExports>
       )}
     </details>
   );
@@ -508,101 +509,106 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
       <PageStatus page={page} t={t} />
       {data && (
         <>
-          <div className="panel">
-            <h1>{data.student.name}</h1>
-            <p>{data.student.className}</p>
-            <div className="history-totals">
-              <div>
-                <strong>{data.totals.caseReports}</strong>
-                <span>{t("تقارير الحالات", "Case reports")}</span>
+          <h1>{data.student.name}</h1>
+          <p>{data.student.className}</p>
+          <HistoryExports studentId={data.student.id} lang={lang} t={t}>
+            <div className="panel">
+              <div className="history-totals">
+                <div>
+                  <strong>{data.totals.caseReports}</strong>
+                  <span>{t("تقارير الحالات", "Case reports")}</span>
+                </div>
+                <div>
+                  <strong>{data.totals.lateDays}</strong>
+                  <span>{t("أيام التأخر", "Late days")}</span>
+                </div>
               </div>
-              <div>
-                <strong>{data.totals.lateDays}</strong>
-                <span>{t("أيام التأخر", "Late days")}</span>
-              </div>
+              <p className="hint">
+                {t(
+                  "يعرض التقارير التي وصلت إلى الإشراف العام من مشرفي الصف. المسودات وما لم يُرسل بعد لا يظهر هنا.",
+                  "Shows reports received by general supervision from supervisors of this grade. Drafts and undelivered records are not included.",
+                )}
+              </p>
+              {data.totals.lateDays > 0 && (
+                <details className="history-dates">
+                  <summary>
+                    {t("تواريخ التأخر", "Dates of lateness")} (
+                    {data.totals.lateDays})
+                  </summary>
+                  <p className="hint">
+                    {t(
+                      "يُحسب التاريخ مرة واحدة حتى لو أرسل أكثر من مشرف تقريرًا عنه.",
+                      "Each date counts once, even if several supervisors report it.",
+                    )}
+                  </p>
+                  <ul>
+                    {data.totals.lateDates.map((date) => (
+                      <li key={date}>{formatDate(date)}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className="hint">
+                {t("آخر تحديث", "Last refreshed")}:{" "}
+                {new Date(data.fetchedAt).toLocaleString(
+                  lang === "en" ? "en-GB" : "ar-KW",
+                  { timeZone: "Asia/Kuwait" },
+                )}
+              </p>
             </div>
-            <p className="hint">
-              {t(
-                "يعرض التقارير التي وصلت إلى الإشراف العام من مشرفي الصف. المسودات وما لم يُرسل بعد لا يظهر هنا.",
-                "Shows reports received by general supervision from supervisors of this grade. Drafts and undelivered records are not included.",
-              )}
-            </p>
-            {data.totals.lateDays > 0 && (
-              <details className="history-dates">
-                <summary>
-                  {t("تواريخ التأخر", "Dates of lateness")} (
-                  {data.totals.lateDays})
-                </summary>
-                <p className="hint">
-                  {t(
-                    "يُحسب التاريخ مرة واحدة حتى لو أرسل أكثر من مشرف تقريرًا عنه.",
-                    "Each date counts once, even if several supervisors report it.",
-                  )}
-                </p>
-                <ul>
-                  {data.totals.lateDates.map((date) => (
-                    <li key={date}>{formatDate(date)}</li>
-                  ))}
-                </ul>
-              </details>
+            <div
+              className="history-filters"
+              aria-label={t("نوع السجل", "Record type")}
+            >
+              {[
+                ["", "الكل", "All"],
+                ["case", "الحالات", "Cases"],
+                ["late", "التأخر", "Lateness"],
+              ].map(([value, ar, en]) => (
+                <button
+                  className="button"
+                  key={value}
+                  aria-pressed={kind === value}
+                  onClick={() => setKind(value)}
+                >
+                  {t(ar, en)}
+                </button>
+              ))}
+            </div>
+            {data && (
+              <div className="panel">
+                {!data.total && (
+                  <p>
+                    {t(
+                      "لا توجد تقارير واردة ضمن هذا الاختيار.",
+                      "No received reports match this selection.",
+                    )}
+                  </p>
+                )}
+                {data.records.map((record) => (
+                  <HistoryEntry
+                    key={record.id + ":" + record.revision}
+                    record={record}
+                    studentId={data.student.id}
+                    t={t}
+                    formatDate={formatDate}
+                    lang={lang}
+                  />
+                ))}
+                {data.nextOffset !== null && (
+                  <button
+                    className="button"
+                    disabled={page.busy}
+                    onClick={page.more}
+                  >
+                    {t("عرض المزيد", "Show more")} ({data.records.length} /{" "}
+                    {data.total})
+                  </button>
+                )}
+              </div>
             )}
-            <p className="hint">
-              {t("آخر تحديث", "Last refreshed")}:{" "}
-              {new Date(data.fetchedAt).toLocaleString(
-                lang === "en" ? "en-GB" : "ar-KW",
-                { timeZone: "Asia/Kuwait" },
-              )}
-            </p>
-          </div>
-          <HistoryExports studentId={data.student.id} lang={lang} t={t} />
+          </HistoryExports>
         </>
-      )}
-      <div
-        className="history-filters"
-        aria-label={t("نوع السجل", "Record type")}
-      >
-        {[
-          ["", "الكل", "All"],
-          ["case", "الحالات", "Cases"],
-          ["late", "التأخر", "Lateness"],
-        ].map(([value, ar, en]) => (
-          <button
-            className="button"
-            key={value}
-            aria-pressed={kind === value}
-            onClick={() => setKind(value)}
-          >
-            {t(ar, en)}
-          </button>
-        ))}
-      </div>
-      {data && (
-        <div className="panel">
-          {!data.total && (
-            <p>
-              {t(
-                "لا توجد تقارير واردة ضمن هذا الاختيار.",
-                "No received reports match this selection.",
-              )}
-            </p>
-          )}
-          {data.records.map((record) => (
-            <HistoryEntry
-              key={record.id + ":" + record.revision}
-              record={record}
-              studentId={data.student.id}
-              t={t}
-              formatDate={formatDate}
-              lang={lang}
-            />
-          ))}
-          {data.nextOffset !== null && (
-            <button className="button" disabled={page.busy} onClick={page.more}>
-              {t("عرض المزيد", "Show more")} ({data.records.length} /{" "}
-              {data.total})
-            </button>
-          )}
-        </div>
       )}
     </section>
   );
