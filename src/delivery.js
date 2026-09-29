@@ -302,9 +302,30 @@ function jobFor(row, c, revision = (row.receipt?.revision || 0) + 1) {
       deviceId: c.deviceId,
       ...(row.backup
         ? { backup: row.backup }
-        : { revision, form: submissionForm(row.form) }),
+        : row.withdrawalRequestedAt
+          ? { action: "withdraw", revision, formId: row.form.id }
+          : { revision, form: submissionForm(row.form) }),
     }),
   };
+}
+// Retain the original pending packet until acknowledged, then send a withdrawal
+// at the next revision. A lost reply must never cause us to skip a revision.
+export async function queueWithdrawal(formId) {
+  const connection = await readSetting("connection");
+  if (!connection || connection.supervisor.role === "general")
+    throw Error("اتصال مشرف الصف مطلوب");
+  const id = `${connection.serverId}:${connection.supervisor.id}:${formId}`;
+  await transaction("records", "readwrite", async (s) => {
+    const row = await request(s.get(id));
+    if (!row?.form || !sameConnection(row, connection))
+      throw Error("سجل إرسال هذا التقرير غير متاح على هذا الجهاز");
+    if (row.withdrawalRequestedAt) return;
+    row.withdrawalRequestedAt = new Date().toISOString();
+    row.updatedAt = row.withdrawalRequestedAt;
+    row.fingerprint = `withdraw:${row.withdrawalRequestedAt}`;
+    if (!row.job) row.job = jobFor(row, connection);
+    await request(s.put(row));
+  });
 }
 // Only an explicit backup download creates a job. Draft changes never call this.
 export async function queueBackup(contents, filename) {
@@ -346,6 +367,9 @@ export async function reconcileSaved() {
     await transaction("records", "readwrite", async (s) => {
       const previous = await request(s.get(id));
       if (previous && !sameConnection(previous, connection)) return;
+      // Restored old backups and stale tabs cannot resubmit a withdrawn report.
+      if (previous?.withdrawalRequestedAt || previous?.receipt?.withdrawn)
+        return;
       if (previous?.fingerprint === fingerprint) {
         // Replay the exact acknowledged revision once to upgrade an older
         // receipt. This assigns a reference without submitting another case.
@@ -419,7 +443,11 @@ async function deliverOnce() {
       );
       const receipt = await post(
         connection.endpoint,
-        row.backup ? "/v1/backups" : "/v1/records",
+        row.backup
+          ? "/v1/backups"
+          : JSON.parse(job.message).action === "withdraw"
+            ? "/v1/withdrawals"
+            : "/v1/records",
         {
           message: job.message,
           signature,
@@ -432,8 +460,9 @@ async function deliverOnce() {
         receipt.deviceId !== connection.deviceId ||
         (sent.backup
           ? receipt.backupId !== sent.backup.id
-          : receipt.formId !== sent.form.id ||
-            receipt.revision !== sent.revision) ||
+          : receipt.formId !== (sent.formId || sent.form.id) ||
+            receipt.revision !== sent.revision ||
+            Boolean(receipt.withdrawn) !== (sent.action === "withdraw")) ||
         !receipt.receiptId ||
         !Number.isFinite(Date.parse(receipt.receivedAt)) ||
         (receipt.reference !== undefined &&
@@ -519,6 +548,22 @@ export async function deliveryState() {
       .filter((r) => r.form)
       .map((r) => ({
         formId: r.form.id,
+        kind: r.form.kind,
+        date: r.form.date,
+        label: [
+          r.form.className || r.form.grade || "",
+          r.form.student ||
+            r.form.students
+              ?.slice(0, 3)
+              .map((s) => s.student)
+              .filter(Boolean)
+              .join("، ") ||
+            "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        withdrawalRequestedAt: r.withdrawalRequestedAt || null,
+        withdrawn: Boolean(r.receipt?.withdrawn),
         savedAt: r.form.savedAt,
         pending: Boolean(r.job),
         receipt: r.receipt,

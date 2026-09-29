@@ -64,7 +64,7 @@ export function makeSchoolSnapshot(config, supervisor, students, records, snapsh
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     records: records
-      .filter((r) => receivedKinds.includes(r.form.kind) && gradeNumber(r.grade))
+      .filter((r) => !r.withdrawnAt && receivedKinds.includes(r.form.kind) && gradeNumber(r.grade))
       .map((r) => ({
         id: r.id,
         supervisorId: r.supervisorId,

@@ -111,6 +111,7 @@ const latest = (a, b) => {
 export function buildOverview(records, students, scope, fetchedAt = new Date().toISOString()) {
   const allowed = records.filter(
     (row) =>
+      !row.withdrawnAt &&
       receivedKinds.includes(row.form.kind) &&
       gradeNumber(row.grade) &&
       (!scope.grade || gradeNumber(row.grade) === scope.grade),

@@ -210,3 +210,12 @@
   border: 1px solid var(--line);
   border-radius: 10px;
 }
+.general-back-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.5rem 0;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0.75rem;
+}

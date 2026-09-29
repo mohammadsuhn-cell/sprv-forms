@@ -11,6 +11,7 @@ import { titles, dateLabel, schoolIdentity, today } from "./model.js";
 import { FileActions } from "./file-actions.jsx";
 import { historyFileName } from "./history-export.js";
 import "./general-workspace.css";
+import { useWorkspaceNavigation } from "./workspace-navigation.js";
 
 const periods = [
   ["today", "اليوم", "Today"],
@@ -601,63 +602,89 @@ export function GeneralWorkspace(props) {
     </SchoolSnapshotWorkspace>
   );
 }
-function GeneralWorkspaceView({ connection, lang, t }) {
+function GeneralWorkspaceView({ connection, lang, t, active }) {
   const { local } = useReads();
-  const [tab, setTab] = useState("overview"),
-    [scope, setScope] = useState({ period: "today", grade: "" });
-  const [view, setView] = useState(""),
-    [record, setRecord] = useState(null),
-    [studentId, setStudentId] = useState("");
-  const [query, setQuery] = useState(""),
-    [className, setClassName] = useState("");
-  const [filters, setFilters] = useState({ kind: "", supervisorId: "" });
-  const [customStart, setCustomStart] = useState(today()),
-    [customEnd, setCustomEnd] = useState(today()),
-    [filterError, setFilterError] = useState("");
+  const [
+    {
+      tab,
+      view,
+      record,
+      studentId,
+      scope,
+      query,
+      className,
+      filters,
+      customStart,
+      customEnd,
+    },
+    navigate,
+    back,
+  ] = useWorkspaceNavigation(
+    {
+      tab: "overview",
+      view: "",
+      record: null,
+      studentId: "",
+      scope: { period: "today", grade: "" },
+      query: "",
+      className: "",
+      filters: { kind: "", supervisorId: "" },
+      customStart: today(),
+      customEnd: today(),
+    },
+    active,
+  );
+  const setView = (view) => navigate({ view });
+  const replaceValue = (key) => (value) =>
+    navigate(
+      (old) => ({
+        [key]: typeof value === "function" ? value(old[key]) : value,
+      }),
+      { replace: true },
+    );
+  const setScope = replaceValue("scope"),
+    setQuery = replaceValue("query"),
+    setClassName = replaceValue("className"),
+    setFilters = replaceValue("filters"),
+    setCustomStart = replaceValue("customStart"),
+    setCustomEnd = replaceValue("customEnd");
+  const [filterError, setFilterError] = useState("");
   const [studentsRefresh, setStudentsRefresh] = useState(0);
   const [visited, setVisited] = useState({ students: false, reports: false });
-  const scroll = useRef({ report: 0, student: 0 });
   const overview = useGeneralPage("overview", { version: 2, ...scope });
   const snapshot = overview.data;
   function changeScope(next) {
     setScope(next);
-    setView("");
-    setRecord(null);
-    setStudentId("");
+    navigate({ view: "", record: null, studentId: "" }, { replace: true });
     setClassName("");
     setFilterError("");
   }
   function selectTab(next) {
-    setTab(next);
-    setView("");
-    setRecord(null);
-    setStudentId("");
+    if (next === tab && !view && !record && !studentId) return;
+    navigate({ tab: next, view: "", record: null, studentId: "" });
     setVisited((old) => ({ ...old, [next]: true }));
   }
   function openReport(next) {
-    scroll.current.report = window.scrollY;
-    setRecord(next);
-    window.scrollTo(0, 0);
+    navigate({ record: next });
   }
   function openStudent(id) {
-    scroll.current.student = window.scrollY;
-    setStudentId(id);
-    window.scrollTo(0, 0);
-  }
-  function back(kind) {
-    if (kind === "student") setStudentId("");
-    else setRecord(null);
-    requestAnimationFrame(() => window.scrollTo(0, scroll.current[kind]));
+    navigate({ studentId: id });
   }
   function refresh() {
-    setRecord(null);
-    setStudentId("");
+    navigate({ record: null, studentId: "" }, { replace: true });
     if (tab === "students") setStudentsRefresh((n) => n + 1);
     else overview.reload();
   }
   const hidden = !!record || !!studentId;
   return (
     <div className="general-workspace">
+      {(tab !== "overview" || view || record || studentId) && (
+        <div className="general-back-bar">
+          <button className="button" onClick={back}>
+            {t("رجوع", "Back")}
+          </button>
+        </div>
+      )}
       <div hidden={hidden}>
         <div className="page-heading">
           <div>
@@ -1025,7 +1052,7 @@ function GeneralWorkspaceView({ connection, lang, t }) {
             </div>
             {view && (
               <>
-                <button className="back" onClick={() => setView("")}>
+                <button className="back" onClick={back}>
                   {t("العودة إلى النظرة العامة", "Back to overview")}
                 </button>
                 <Drilldown

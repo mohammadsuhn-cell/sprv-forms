@@ -7,7 +7,127 @@ import {
   previewInvitation,
   reconcileSaved,
   retryDelivery,
+  queueWithdrawal,
 } from "./delivery.js";
+import { titles, dateLabel } from "./model.js";
+
+export function WithdrawalAction({ record, delivery, t }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!record) return null;
+  return (
+    <div className="withdrawal-action">
+      {record.withdrawalRequestedAt ? (
+        <span role="status">
+          {record.withdrawn
+            ? t("تم سحب التقرير", "Report withdrawn")
+            : record.blocked
+              ? t(
+                  "سحب التقرير يحتاج مراجعة في الإعدادات",
+                  "Withdrawal needs review in Settings",
+                )
+              : t(
+                  "بانتظار تأكيد سحب التقرير",
+                  "Awaiting withdrawal confirmation",
+                )}
+        </span>
+      ) : (
+        <button
+          className="text-control danger"
+          disabled={busy}
+          onClick={async () => {
+            if (
+              !confirm(
+                t(
+                  "سحب هذا التقرير من الإشراف العام؟ لن يُحتسب بعد تأكيد الاستلام وتحديث بيانات المدرسة، وسيبقى في سجل المراجعة. لا يمكن إعادة إرسال التقرير نفسه.",
+                  "Withdraw this report from general supervision? After confirmation and a school-data update it will no longer count. Its audit history remains, and this report cannot be resubmitted.",
+                ),
+              )
+            )
+              return;
+            setBusy(true);
+            setError("");
+            try {
+              await queueWithdrawal(record.formId);
+              await delivery.refresh();
+              void delivery.tick();
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {t("سحب التقرير المرسل", "Withdraw submitted report")}
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}
+
+function SubmittedReports({ delivery, t }) {
+  const [query, setQuery] = useState("");
+  const [limit, setLimit] = useState(20);
+  const rows = delivery.records
+    .filter((r) =>
+      `${r.label} ${r.date} ${r.receipt?.reference || ""}`.includes(
+        query.trim(),
+      ),
+    )
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || a.formId.localeCompare(b.formId),
+    );
+  return (
+    <details className="submitted-reports">
+      <summary>
+        {t("التقارير المرسلة وسحب تقرير", "Submitted reports and withdrawals")}
+      </summary>
+      <p className="hint">
+        {t(
+          "يمكن سحب تقرير حتى بعد حذف نسخته من هذا الجهاز. السحب يحتاج اتصالًا وتأكيد استلام؛ النسخ الاحتياطية وحدها لا تسحب التقارير.",
+          "You can withdraw a report even after deleting its device copy. Withdrawal needs a connection and receipt; backups alone do not withdraw reports.",
+        )}
+      </p>
+      <label className="field">
+        <span>{t("بحث في التقارير المرسلة", "Search submitted reports")}</span>
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setLimit(20);
+          }}
+        />
+      </label>
+      {rows.slice(0, limit).map((record) => (
+        <div
+          className="submitted-report"
+          key={record.formId}
+          data-form-id={record.formId}
+        >
+          <strong>
+            {t(...(titles[record.kind] || [record.kind, record.kind]))} ·{" "}
+            {dateLabel(record.date)}
+          </strong>
+          <p>
+            {record.label} {record.receipt?.reference || ""}
+          </p>
+          <WithdrawalAction record={record} delivery={delivery} t={t} />
+          {record.error && <p role="alert">{record.error}</p>}
+        </div>
+      ))}
+      {rows.length > limit && (
+        <button className="button" onClick={() => setLimit(limit + 20)}>
+          {t("عرض المزيد", "Show more")}
+        </button>
+      )}
+      {!rows.length && (
+        <p>{t("لا توجد تقارير مطابقة", "No matching reports")}</p>
+      )}
+    </details>
+  );
+}
 
 export function useDelivery(saved, enabled) {
   const [state, setState] = useState({
@@ -159,6 +279,9 @@ export function DeliveryPanel({
                     : t("تم الاستلام", "Received")}
                 </p>
               ))}
+              {!!delivery.records.length && (
+                <SubmittedReports delivery={delivery} t={t} />
+              )}
             </>
           )}
         </>

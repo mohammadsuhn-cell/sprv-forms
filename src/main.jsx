@@ -37,7 +37,11 @@ import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
 import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
-import { DeliveryPanel, useDelivery } from "./delivery-ui.jsx";
+import {
+  DeliveryPanel,
+  useDelivery,
+  WithdrawalAction,
+} from "./delivery-ui.jsx";
 import { queueBackup } from "./delivery.js";
 import { StudentHistory } from "./student-history.jsx";
 import { GeneralWorkspace } from "./general-workspace.jsx";
@@ -376,6 +380,19 @@ function App() {
   }
   function save() {
     if (readOnlyConnection) return;
+    if (
+      delivery.records.some(
+        (r) => r.formId === form.id && r.withdrawalRequestedAt,
+      )
+    ) {
+      notify(
+        t(
+          "سُحب هذا التقرير أو طُلب سحبه؛ أنشئ تقريرًا جديدًا إذا لزم الأمر",
+          "This report is withdrawn or awaiting withdrawal. Create a new report if needed.",
+        ),
+      );
+      return;
+    }
     if (!delivery.ready) {
       notify(
         t(
@@ -838,6 +855,7 @@ function App() {
               connection={connected}
               lang={data.lang}
               t={t}
+              active={page === "home"}
             />
           </div>
         )}
@@ -1558,6 +1576,7 @@ function App() {
       <div className="saved-row">
         <button
           className="saved-open"
+          disabled={!!receipt?.withdrawalRequestedAt}
           onClick={() => {
             const existing = data.drafts[item.kind];
             if (
@@ -1599,13 +1618,17 @@ function App() {
             </span>
             {item.syncSupervisorId && (
               <span className="record-delivery">
-                {receipt?.blocked
-                  ? t("تحتاج مراجعة", "Needs review")
-                  : receipt?.pending ||
-                      !receipt?.receipt ||
-                      receipt.savedAt !== item.savedAt
-                    ? t("بانتظار الإرسال", "Awaiting delivery")
-                    : t("تم الاستلام", "Received")}
+                {receipt?.withdrawalRequestedAt
+                  ? receipt.withdrawn
+                    ? t("تم سحب التقرير", "Report withdrawn")
+                    : t("بانتظار تأكيد السحب", "Awaiting withdrawal")
+                  : receipt?.blocked
+                    ? t("تحتاج مراجعة", "Needs review")
+                    : receipt?.pending ||
+                        !receipt?.receipt ||
+                        receipt.savedAt !== item.savedAt
+                      ? t("بانتظار الإرسال", "Awaiting delivery")
+                      : t("تم الاستلام", "Received")}
                 {receipt?.receipt &&
                   !receipt.pending &&
                   receipt.savedAt === item.savedAt && (
@@ -1631,6 +1654,9 @@ function App() {
             )}
           </div>
         </button>
+        {remove && receipt && (
+          <WithdrawalAction record={receipt} delivery={delivery} t={t} />
+        )}
         {remove && (
           <button
             className="text-control danger"
@@ -1655,7 +1681,9 @@ function App() {
               }
             }}
           >
-            {t("حذف", "Delete")}
+            {item.syncSupervisorId
+              ? t("حذف من الجهاز", "Remove from device")
+              : t("حذف", "Delete")}
           </button>
         )}
       </div>
