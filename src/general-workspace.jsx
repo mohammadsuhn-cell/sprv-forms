@@ -149,14 +149,7 @@ function Status({ page, t, onRefresh }) {
       {page.error && (
         <div className="alert" role="alert">
           <p>{errorText(page.error, t)}</p>
-          {page.data && (
-            <p>
-              {t(
-                "البيانات المعروضة من آخر تحديث ناجح.",
-                "Showing data from the last successful refresh.",
-              )}
-            </p>
-          )}
+          {page.data && <span>{t("بيانات سابقة", "Earlier data")}</span>}
           <button
             className="button"
             disabled={page.busy}
@@ -271,15 +264,6 @@ function Drilldown({
           ? t("التقارير الواردة", "Received reports")
           : t(...views[view])}
       </h2>
-      {view === "followups" && (
-        <p className="hint">
-          {t(
-            "الحالات المفتوحة حاليًا المستحقة حتى",
-            "Currently open cases due through",
-          )}{" "}
-          {labelDate(snapshot.scope.dueCutoff, lang)}
-        </p>
-      )}
       <Status page={page} t={t} onRefresh={onRefresh} />
       {page.data && (
         <>
@@ -321,10 +305,7 @@ function Drilldown({
                       </p>
                       {entry.authorConflict && (
                         <p className="general-missing">
-                          {t(
-                            "وردت كشوف من أكثر من مشرف؛ يعرض أحدث كشف مكتمل حسب وقت حفظه.",
-                            "Several supervisors submitted sheets; the latest complete saved sheet is shown.",
-                          )}
+                          {t("كشوف متعددة", "Multiple sheets")}
                         </p>
                       )}
                       <details>
@@ -529,18 +510,7 @@ function ReceivedReport({
           <h1>{page.data.report.title}</h1>
           {page.data.revision !== record.revision && (
             <p className="alert" role="status">
-              {t(
-                "تم تحديث هذا التقرير منذ تحميل القائمة. يعرض أحدث نسخة واردة.",
-                "This report changed since the list was loaded. Showing its latest received revision.",
-              )}
-            </p>
-          )}
-          {page.data.filtered && (
-            <p className="hint">
-              {t(
-                "التفاصيل تعرض صفوف الاختيار الحالي. التصدير يشمل السجل الأصلي الكامل.",
-                "Details show rows matching this selection. Exports include the full original register.",
-              )}
+              {t("تم تحديث التقرير", "Report updated")}
             </p>
           )}
           <p className="hint">
@@ -894,7 +864,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                     snapshot.totals.lateReports ?? null,
                     "كشوف المتأخرين",
                     "Lateness reports",
-                    t("حسب تاريخ الكشف", "By report date"),
+                    "",
                   ],
                   [
                     "absence",
@@ -921,7 +891,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                     snapshot.totals.reports,
                     "التقارير الواردة",
                     "Received reports",
-                    t("حسب تاريخ التقرير", "By report date"),
+                    "",
                   ],
                 ].map(([value, count, ar, en, hint]) => (
                   <button
@@ -936,7 +906,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                   >
                     <span>{t(ar, en)}</span>
                     <strong>{count === null ? "—" : count}</strong>
-                    <small>{hint}</small>
+                    {hint && <small>{hint}</small>}
                     <span className="general-card-action">
                       {t("عرض التفاصيل ←", "View details →")}
                     </span>
@@ -947,10 +917,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                 !snapshot.coverage.expected) && (
                 <p className="general-missing">
                   {snapshot.coverage.expected
-                    ? t(
-                        "الغياب جزئي: بعض كشوف الصفوف لم تصل. الأرقام تخص الكشوف المستلمة فقط.",
-                        "Absence coverage is partial. Totals include received sheets only.",
-                      )
+                    ? t("الغياب جزئي", "Partial absence data")
                     : t(
                         "لم تصل كشوف غياب ضمن هذه الفترة.",
                         "No absence sheets received in this period.",
@@ -1033,12 +1000,6 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                   </div>
                 </section>
               )}
-              <p className="hint">
-                {t(
-                  "تُعرض التقارير المستلمة فقط. تواريخ التأخر لا تتكرر للطالب في اليوم نفسه.",
-                  "Only received reports are shown. Each student’s late date counts once.",
-                )}
-              </p>
             </div>
             {view && (
               <>

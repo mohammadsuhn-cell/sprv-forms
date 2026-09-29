@@ -382,14 +382,6 @@ function HistoryExports({ studentId, record, lang, t, children }) {
   return (
     <ExportPanels
       title={title}
-      description={
-        !record
-          ? t(
-              "ملخص الحالات وجميع تواريخ التأخر، بما فيها السجلات غير المعروضة بعد.",
-              "Case summaries and every late date, including records not yet displayed.",
-            )
-          : ""
-      }
       busy={busy}
       error={error}
       file={file}
@@ -523,24 +515,12 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                   <span>{t("أيام التأخر", "Late days")}</span>
                 </div>
               </div>
-              <p className="hint">
-                {t(
-                  "يعرض التقارير التي وصلت إلى الإشراف العام من مشرفي الصف. المسودات وما لم يُرسل بعد لا يظهر هنا.",
-                  "Shows reports received by general supervision from supervisors of this grade. Drafts and undelivered records are not included.",
-                )}
-              </p>
               {data.totals.lateDays > 0 && (
                 <details className="history-dates">
                   <summary>
                     {t("تواريخ التأخر", "Dates of lateness")} (
                     {data.totals.lateDays})
                   </summary>
-                  <p className="hint">
-                    {t(
-                      "يُحسب التاريخ مرة واحدة حتى لو أرسل أكثر من مشرف تقريرًا عنه.",
-                      "Each date counts once, even if several supervisors report it.",
-                    )}
-                  </p>
                   <ul>
                     {data.totals.lateDates.map((date) => (
                       <li key={date}>{formatDate(date)}</li>
@@ -716,12 +696,6 @@ export function StudentHistory({
     return (
       <section className="panel">
         <h1>{t("سجل الطالب", "Student history")}</h1>
-        <p>
-          {t(
-            "فعّل اتصال المشرف لعرض سجل طلبة صفك لدى الإشراف العام.",
-            "Activate your supervisor connection to view the shared history of students in your grade.",
-          )}
-        </p>
         <button className="button" onClick={onSettings}>
           {t("فتح الإعدادات", "Open Settings")}
         </button>

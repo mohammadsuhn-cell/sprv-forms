@@ -68,12 +68,6 @@ export function CaseEditor({
           />
         </div>
         <h2>{t("الطلبة المعنيون", "Students involved")}</h2>
-        <p className="hint">
-          {t(
-            "أضف جميع الطلبة المشاركين في الواقعة نفسها. تُحفظ كحالة واحدة.",
-            "Add everyone involved in the same incident. This is saved as one case.",
-          )}
-        </p>
         {students.map((student, index) => (
           <fieldset className="case-student" key={student.id}>
             <legend>
@@ -213,14 +207,6 @@ export function CaseEditor({
       </section>
       <section className="panel">
         <h2>{t("الإجراء والمتابعة", "Action & follow-up")}</h2>
-        {students.length > 1 && (
-          <p className="hint">
-            {t(
-              "الإجراء مشترك لجميع الطلبة، ويمكن تخصيصه لكل طالب أدناه. موعد المتابعة مشترك للحالة.",
-              "This action applies to all students. You can choose a different action for each student below. The follow-up date applies to the whole case.",
-            )}
-          </p>
-        )}
         <div className="fields">
           <Field
             lang={lang}

@@ -4,7 +4,6 @@ import { FileActions } from "./file-actions.jsx";
 // Both ends operate on one preparation/file state owned by the caller.
 export function ExportPanels({
   title,
-  description,
   formats = ["pdf", "docx", "xlsx"],
   busy,
   error,
@@ -46,7 +45,6 @@ export function ExportPanels({
           ))}
         </div>
       </div>
-      {where === "top" && description && <p className="hint">{description}</p>}
       {where === position && (
         <>
           {busy && (

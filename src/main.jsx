@@ -1300,16 +1300,6 @@ function App() {
               existingCount={earlierForms.length}
               initialInvitation={activationFragment}
             />
-            {readOnlyConnection && (
-              <section className="panel">
-                <p>
-                  {t(
-                    "مساحة الإشراف العام للعرض والمتابعة. اللغة متاحة من أعلى الصفحة.",
-                    "This workspace provides read access to received reports and student history. Change language at the top of the page.",
-                  )}
-                </p>
-              </section>
-            )}
             {!readOnlyConnection && (
               <>
                 <section className="panel">
@@ -1530,15 +1520,6 @@ function App() {
                 </details>
               </>
             )}
-            <section className="panel">
-              {sectionTitle("اختصار على الهاتف", "Phone shortcut")}
-              <p className="settings-note">
-                {t(
-                  "من قائمة المتصفح أو المشاركة، اختر «إضافة إلى الشاشة الرئيسية».",
-                  "From the browser menu or Share menu, choose “Add to Home Screen”.",
-                )}
-              </p>
-            </section>
           </>
         )}
       </main>
