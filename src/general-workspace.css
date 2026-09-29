@@ -294,59 +294,6 @@
   cursor: pointer;
   color: var(--muted);
 }
-.late-class {
-  border-bottom: 1px solid var(--line);
-}
-.late-class > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
-  cursor: pointer;
-  padding: 10px;
-}
-.late-class > summary::before {
-  content: "▸";
-}
-.late-class[open] > summary::before {
-  content: "▾";
-}
-.late-class > summary strong {
-  flex: 1;
-}
-.late-class > summary span {
-  font-size: 14px;
-  color: var(--muted);
-}
-.late-student-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.late-student-heading span {
-  font-size: 12px;
-  color: var(--muted);
-}
-.general-workspace .late-student-row {
-  padding: 8px 10px;
-}
-.general-workspace .late-student-row .history-student {
-  padding: 0;
-  border: 0;
-  min-height: 32px;
-  width: auto;
-  background: none;
-}
-.general-workspace .late-student-row details {
-  margin: 0;
-}
-.general-workspace .late-student-row summary {
-  min-height: 30px;
-  font-size: 13px;
-  color: var(--muted);
-}
 .export-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -410,10 +357,5 @@
   }
   .general-workspace .general-filter-panel > .field {
     width: 140px;
-  }
-  .late-student-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0;
   }
 }

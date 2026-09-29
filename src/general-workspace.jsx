@@ -28,7 +28,7 @@ const gradeLabels = [
 ];
 const views = {
   cases: ["تقارير الحالات", "Case reports"],
-  late: ["الطلبة المتأخرون", "Late students"],
+  late: ["كشوف المتأخرين", "Lateness reports"],
   absence: ["الغياب حسب اليوم والصف", "Absence by date and grade"],
   followups: ["متابعات مستحقة", "Follow-ups due"],
   unmatched: ["أسماء تحتاج مطابقة", "Names needing a match"],
@@ -193,6 +193,14 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
           {t("الصف", "Grade")} {record.grade}
           {record.type ? " · " + record.type : ""}
         </span>
+        {record.lateReport && (
+          <span>
+            {record.lateReport.classes.join(" · ")}
+            {record.lateReport.classes.length ? " · " : ""}
+            {t("عدد المتأخرين", "Late students")}:{" "}
+            {record.lateReport.studentCount}
+          </span>
+        )}
         {record.reference && <bdi>{record.reference}</bdi>}
         {record.kind === "cases" && (
           <span>
@@ -233,86 +241,6 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
   );
 }
 
-function LateClass({
-  group,
-  snapshot,
-  lang,
-  t,
-  onStudent,
-  onReport,
-  onRefresh,
-}) {
-  const [open, setOpen] = useState(false);
-  const page = useGeneralPage(
-    "overview-details",
-    { snapshotId: snapshot.snapshotId, view: "late", lateGroup: group.id },
-    open,
-  );
-  return (
-    <details
-      className="late-class"
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-    >
-      <summary>
-        <strong>{group.className}</strong>
-        <span>
-          {group.students} {t("طالب", "students")} · {group.lateDays}{" "}
-          {t("أيام تأخر", "late days")}
-        </span>
-      </summary>
-      {open && (
-        <>
-          <Status page={page} t={t} onRefresh={onRefresh} />
-          {page.data?.items.map((entry) => (
-            <article
-              className="general-detail-row late-student-row"
-              key={entry.id}
-            >
-              <div className="late-student-heading">
-                <button
-                  className="history-student"
-                  onClick={() => onStudent(entry.id)}
-                >
-                  {entry.name}
-                </button>
-                <span>
-                  {entry.lateDays} {t("أيام", "days")} ·{" "}
-                  {t("آخر تأخر", "Latest")}:{" "}
-                  {labelDate(entry.days[0].date, lang)}
-                </span>
-              </div>
-              <details>
-                <summary>{t("الأيام والتقارير", "Dates & reports")}</summary>
-                {entry.days.map((day) => (
-                  <div key={day.date}>
-                    <strong>{labelDate(day.date, lang)}</strong>
-                    {day.reports.map((record) => (
-                      <button
-                        className="text-control"
-                        key={record.id}
-                        onClick={() => onReport(record)}
-                      >
-                        {record.supervisorName} ·{" "}
-                        {t("فتح التقرير", "Open report")}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </details>
-            </article>
-          ))}
-          {page.data?.nextCursor && (
-            <button className="button" disabled={page.busy} onClick={page.more}>
-              {t("عرض المزيد", "Show more")} ({page.data.items.length} /{" "}
-              {page.data.total})
-            </button>
-          )}
-        </>
-      )}
-    </details>
-  );
-}
-
 function Drilldown({
   view,
   snapshot,
@@ -324,11 +252,16 @@ function Drilldown({
   onRefresh,
 }) {
   const page = useGeneralPage(
-    view === "reports" ? "received-reports" : "overview-details",
+    ["reports", "late"].includes(view)
+      ? "received-reports"
+      : "overview-details",
     {
       snapshotId: snapshot.snapshotId,
-      ...(view === "late" ? { groupBy: "class" } : {}),
-      ...(view === "reports" ? filters : { view }),
+      ...(view === "late"
+        ? { kind: "late" }
+        : view === "reports"
+          ? filters
+          : { view }),
     },
   );
   return (
@@ -352,7 +285,7 @@ function Drilldown({
         <>
           <p className="hint">
             {view === "late"
-              ? t("عدد الشعب", "Classes")
+              ? t("عدد الكشوف", "Reports")
               : t("عدد النتائج", "Results")}
             : {page.data.total}
           </p>
@@ -368,18 +301,7 @@ function Drilldown({
           )}
           <div className="panel general-results">
             {page.data.items.map((entry, index) =>
-              view === "late" ? (
-                <LateClass
-                  key={entry.id}
-                  group={entry}
-                  snapshot={snapshot}
-                  lang={lang}
-                  t={t}
-                  onReport={onReport}
-                  onStudent={onStudent}
-                  onRefresh={onRefresh}
-                />
-              ) : view === "absence" ? (
+              view === "absence" ? (
                 <article className="general-detail-row" key={entry.id}>
                   <h3>
                     {t("الصف", "Grade")} {entry.grade} ·{" "}
@@ -969,10 +891,10 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                   ],
                   [
                     "late",
-                    snapshot.totals.lateStudents,
-                    "الطلبة المتأخرون",
-                    "Late students",
-                    `${snapshot.totals.lateDays} ${t("أيام تأخر للطلبة", "student late days")}`,
+                    snapshot.totals.lateReports ?? null,
+                    "كشوف المتأخرين",
+                    "Lateness reports",
+                    t("حسب تاريخ الكشف", "By report date"),
                   ],
                   [
                     "absence",

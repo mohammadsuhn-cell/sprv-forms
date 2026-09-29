@@ -105,6 +105,18 @@ export function reportSummary(row, form, students) {
     reference: row.reference || '',
     type: form.type || '',
     rowCount: form.kind === 'cases' ? form.rows.length : undefined,
+    ...(form.kind === 'late'
+      ? {
+          lateReport: {
+            studentCount: (form.students || []).length,
+            classes: [
+              ...new Set(
+                (form.students || []).map((s) => s.className || form.className).filter(Boolean),
+              ),
+            ],
+          },
+        }
+      : {}),
     dates:
       form.kind === 'cases'
         ? [...new Set(form.rows.map((entry) => entry.date))].sort().reverse()
@@ -265,6 +277,7 @@ export function buildOverview(records, students, scope, fetchedAt = new Date().t
     caseReports: cases.length,
     caseStudents: caseStudents.size,
     lateStudents: late.length,
+    lateReports: reports.filter((r) => r.kind === 'late').length,
     lateDays: late.reduce((n, entry) => n + entry.lateDays, 0),
     absenceDays: absence.some((entry) => entry.received)
       ? absence.reduce((n, entry) => n + (entry.absent || 0), 0)
@@ -300,6 +313,7 @@ export function buildOverview(records, students, scope, fetchedAt = new Date().t
       caseReports: 'reports',
       caseStudents: 'students',
       lateStudents: 'students',
+      lateReports: 'reports',
       lateDays: 'student-days',
       absenceDays: scope.start && scope.start === scope.end ? 'students' : 'student-days',
       followups: 'reports',
