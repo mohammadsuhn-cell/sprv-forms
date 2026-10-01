@@ -16,6 +16,7 @@ import {
   receivedStudentContext,
   receivedHistoryTotals,
   matchRosterStudent,
+  validStudentId,
 } from './student-directory.js';
 import { referencedForm, studentCaseSummaries } from './received-details.js';
 import { normalize } from './normalize.js';
@@ -29,9 +30,20 @@ const requireValue = (ok) => {
   if (!ok) throw error();
 };
 export const snapshotOwner = (connection) => {
-  if (connection?.supervisor?.role !== 'general') throw error('snapshot_scope');
+  snapshotScope(connection);
   return `${connection.serverId}:${connection.supervisor.id}`;
 };
+export function snapshotScope(connection) {
+  const supervisor = connection?.supervisor;
+  if (supervisor?.role === 'general') return { role: 'general', grade: '' };
+  if (
+    supervisor &&
+    [undefined, 'supervisor'].includes(supervisor.role) &&
+    gradeNumber(supervisor.grade)
+  )
+    return { role: 'supervisor', grade: gradeNumber(supervisor.grade) };
+  throw error('snapshot_scope');
+}
 export function snapshotHeader(value) {
   return {
     format: snapshotFormat,
@@ -43,9 +55,11 @@ export function snapshotHeader(value) {
     school: value.school,
     year: value.year,
     capturedAt: value.capturedAt,
+    ...(value.scope !== undefined ? { scope: value.scope } : {}),
   };
 }
 export function makeSchoolSnapshot(config, supervisor, students, records, snapshotId, capturedAt) {
+  const scope = snapshotScope({ supervisor });
   return {
     ...snapshotHeader({
       ...config,
@@ -53,9 +67,10 @@ export function makeSchoolSnapshot(config, supervisor, students, records, snapsh
       preparedBy: supervisor.name,
       snapshotId,
       capturedAt,
+      ...(scope.role === 'supervisor' ? { scope } : {}),
     }),
     students: students
-      .filter(studentGrade)
+      .filter((s) => studentGrade(s) && (!scope.grade || studentGrade(s) === scope.grade))
       .map((s) => ({
         id: s.id,
         name: s.name,
@@ -65,7 +80,14 @@ export function makeSchoolSnapshot(config, supervisor, students, records, snapsh
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     records: records
-      .filter((r) => !r.withdrawnAt && receivedKinds.includes(r.form.kind) && gradeNumber(r.grade))
+      .filter(
+        (r) =>
+          !r.withdrawnAt &&
+          receivedKinds.includes(r.form.kind) &&
+          (scope.role === 'general' || ['case', 'cases', 'late'].includes(r.form.kind)) &&
+          gradeNumber(r.grade) &&
+          (!scope.grade || gradeNumber(r.grade) === scope.grade),
+      )
       .map((r) => ({
         id: r.id,
         supervisorId: r.supervisorId,
@@ -92,8 +114,19 @@ function bounded(value, depth = 0) {
 }
 export function validateSchoolSnapshot(value, connection) {
   const owner = snapshotOwner(connection);
+  const scope = snapshotScope(connection);
   requireValue(value && value.format === snapshotFormat && value.version === 1);
   if (`${value.serverId}:${value.supervisorId}` !== owner) throw error('snapshot_owner');
+  const declared = value.scope;
+  // Existing general-supervisor backups have no explicit scope and remain valid.
+  if (
+    (scope.role === 'supervisor' && !declared) ||
+    (declared &&
+      (declared.role !== scope.role ||
+        declared.grade !== scope.grade ||
+        Object.keys(declared).some((key) => !['role', 'grade'].includes(key))))
+  )
+    throw error('snapshot_scope');
   requireValue(id(value.serverId) && id(value.supervisorId) && id(value.snapshotId));
   requireValue(typeof value.preparedBy === 'string' && value.preparedBy.length <= 150);
   requireValue(
@@ -111,13 +144,14 @@ export function validateSchoolSnapshot(value, connection) {
     references = new Set();
   for (const student of value.students) {
     requireValue(
-      id(student?.id) &&
+      validStudentId(student?.id) &&
         !ids.has(student.id) &&
         typeof student.name === 'string' &&
         student.name.length <= 500 &&
         typeof student.className === 'string' &&
         !!studentGrade(student),
     );
+    if (scope.grade && studentGrade(student) !== scope.grade) throw error('snapshot_scope');
     requireValue(
       typeof student.archived === 'boolean' &&
         Array.isArray(student.rosterIds) &&
@@ -172,6 +206,9 @@ export function validateSchoolSnapshot(value, connection) {
             !references.has(row.reference))),
     );
     requireValue(validDate(row.form.date));
+    if (scope.grade && gradeNumber(row.grade) !== scope.grade) throw error('snapshot_scope');
+    if (scope.grade && !['case', 'cases', 'late'].includes(row.form.kind))
+      throw error('snapshot_scope');
     bounded(row.form);
     try {
       validateStore({ ...emptyStore(), saved: [structuredClone(row.form)] });
@@ -193,6 +230,7 @@ export function validateSchoolSnapshot(value, connection) {
 // Its records are immutable for the lifetime of this reader; updating remounts it.
 export function createSnapshotReader(snapshot, clock = () => new Date()) {
   const { students, records } = snapshot;
+  const scopeGrade = snapshot.scope?.grade || '';
   const pages = new Map();
   const overviews = new Map();
   let sequence = 0;
@@ -235,7 +273,8 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
     };
   }
   const studentFor = (params) =>
-    students.find((s) => s.id === params.studentId) || fail('student_not_found', 404);
+    matchRosterStudent({ studentId: params.studentId }, students, scopeGrade).student ||
+    fail('student_not_found', 404);
   const recordFor = (params) =>
     records.find((r) => r.id === params.recordId) || fail('record_not_found', 404);
   const studentMatches = (row, student) =>
@@ -258,6 +297,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
     };
   }
   async function general(action, params = {}) {
+    if (snapshot.scope?.role === 'supervisor') return fail('scope', 403);
     if (action === 'overview') {
       const data = buildOverview(
         records,
@@ -328,7 +368,9 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
   }
   async function student(action, params = {}) {
     if (action === 'students') {
-      const scoped = students.filter((s) => !params.grade || studentGrade(s) === params.grade);
+      if (scopeGrade && params.grade && params.grade !== scopeGrade) return fail('scope', 403);
+      const grade = scopeGrade || params.grade || '';
+      const scoped = students.filter((s) => !grade || studentGrade(s) === grade);
       const items = scoped
         .filter(
           (s) =>
@@ -346,7 +388,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
         action,
         params,
         {
-          grade: params.grade || 'all',
+          grade: grade || 'all',
           classes: [...new Set(scoped.map((s) => s.className))].sort((a, b) =>
             a.localeCompare(b, 'ar', { numeric: true }),
           ),

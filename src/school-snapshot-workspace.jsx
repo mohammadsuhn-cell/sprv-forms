@@ -23,13 +23,18 @@ const formatTime = (time, lang) =>
 function message(error, t) {
   if (error.code === "snapshot_owner")
     return t(
-      "هذه النسخة لحساب مشرف عام أو جهاز استقبال آخر. فعّل الحساب نفسه أولًا.",
-      "This backup belongs to another general-supervisor account or receiver. Activate the same account first.",
+      "هذه النسخة لحساب مشرف أو جهاز استقبال آخر. فعّل الحساب نفسه أولًا.",
+      "This backup belongs to another supervisor account or receiver. Activate the same account first.",
     );
   if (error.code === "snapshot_invalid")
     return t(
       "ملف النسخة غير صالح أو غير مكتمل. لم تتغير النسخة المحفوظة.",
       "The snapshot file is invalid or incomplete. Your saved copy was not changed.",
+    );
+  if (error.code === "snapshot_scope")
+    return t(
+      "هذه النسخة لا تطابق صلاحية الحساب أو صفه. لم تتغير النسخة المحفوظة.",
+      "This snapshot does not match the account's role or grade. Your saved copy was not changed.",
     );
   if (error.code === "snapshot_limit")
     return t(
@@ -41,11 +46,7 @@ function message(error, t) {
       "النسخة الواردة أقدم من المحفوظة. تحقق من وقت جهاز الاستقبال.",
       "The received snapshot is older than your saved copy. Check the receiver clock.",
     );
-  if (
-    error.code === "revoked" ||
-    error.code === "snapshot_scope" ||
-    error.status === 403
-  )
+  if (error.code === "revoked" || error.status === 403)
     return t(
       "أُلغي وصول هذا الجهاز. راجع الإشراف لتفعيل الاتصال.",
       "Access for this device was withdrawn. Contact supervision to activate it.",
@@ -81,6 +82,16 @@ export function SchoolSnapshotWorkspace({
   onSettings,
 }) {
   const live = useReads();
+  const gradeSnapshot = connection.supervisor.role !== "general";
+  const updateLabel = gradeSnapshot
+    ? t("تحديث سجل الصف", "Update grade history")
+    : t("تحديث بيانات المدرسة", "Update school data");
+  const backupLabel = gradeSnapshot
+    ? t("تنزيل نسخة سجل الصف", "Download grade history backup")
+    : t("تنزيل نسخة احتياطية", "Download backup");
+  const restoreLabel = gradeSnapshot
+    ? t("استعادة نسخة سجل الصف", "Restore grade history backup")
+    : t("استعادة نسخة احتياطية", "Restore backup");
   const [bundle, setBundle] = useState(null),
     [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false),
@@ -97,6 +108,8 @@ export function SchoolSnapshotWorkspace({
     connection.deviceId,
     connection.supervisor.id,
     connection.endpoint,
+    connection.supervisor.role,
+    connection.supervisor.grade,
   ]);
   useEffect(() => {
     const version = ++generation.current;
@@ -214,7 +227,11 @@ export function SchoolSnapshotWorkspace({
       {(active || showSettings) && (
         <section
           className="panel school-snapshot-tools"
-          aria-label={t("نسخة المدرسة", "School snapshot")}
+          aria-label={
+            gradeSnapshot
+              ? t("نسخة سجل الصف", "Grade history snapshot")
+              : t("نسخة المدرسة", "School snapshot")
+          }
         >
           {active && !showSettings ? (
             <div className="snapshot-status-bar">
@@ -222,7 +239,9 @@ export function SchoolSnapshotWorkspace({
                 <strong>
                   {bundle
                     ? t("آخر تحديث", "Last updated")
-                    : t("بيانات المدرسة", "School data")}
+                    : gradeSnapshot
+                      ? t("سجل الصف", "Grade history")
+                      : t("بيانات المدرسة", "School data")}
                 </strong>
                 <span>
                   {bundle
@@ -239,7 +258,7 @@ export function SchoolSnapshotWorkspace({
                 disabled={!ready || busy}
                 onClick={update}
               >
-                {t("تحديث بيانات المدرسة", "Update school data")}
+                {updateLabel}
               </button>
               <button className="text-control" onClick={onSettings}>
                 {t("النسخ الاحتياطية", "Backups")}
@@ -249,15 +268,17 @@ export function SchoolSnapshotWorkspace({
             <>
               <div>
                 <strong>
-                  {bundle
-                    ? t(
-                        "نسخة المدرسة محفوظة على هذا الجهاز",
-                        "School snapshot saved on this device",
-                      )
-                    : t(
-                        "احتفظ بنسخة المدرسة معك",
-                        "Keep a copy of the school records",
-                      )}
+                  {gradeSnapshot
+                    ? t("سجل الصف المحفوظ", "Saved grade history")
+                    : bundle
+                      ? t(
+                          "نسخة المدرسة محفوظة على هذا الجهاز",
+                          "School snapshot saved on this device",
+                        )
+                      : t(
+                          "احتفظ بنسخة المدرسة معك",
+                          "Keep a copy of the school records",
+                        )}
                 </strong>
                 <p className="hint">
                   {bundle ? (
@@ -270,16 +291,20 @@ export function SchoolSnapshotWorkspace({
                     </>
                   ) : (
                     t(
-                      "حدّث بيانات المدرسة أثناء اتصال جهاز الاستقبال، ثم تصفح السجلات والتقارير وصدّرها دون اتصال.",
-                      "Update while the receiver is online, then browse and export school records offline.",
+                      gradeSnapshot
+                        ? "حدّث سجل الصف أثناء اتصال جهاز الاستقبال، ثم تصفح سجل الطلبة وصدّره دون اتصال."
+                        : "حدّث بيانات المدرسة أثناء اتصال جهاز الاستقبال، ثم تصفح السجلات والتقارير وصدّرها دون اتصال.",
+                      "Update while the receiver is online, then browse and export the saved records offline.",
                     )
                   )}
                 </p>
                 {bundle && (
                   <p className="hint">
                     {t(
-                      "تعرض الصفحات النسخة المحفوظة. تحديث بيانات المدرسة يجلب جميع التقارير والتعديلات الجديدة.",
-                      "Pages use your saved copy. Update school data to receive all new reports and corrections.",
+                      gradeSnapshot
+                        ? "تعرض السجلات النسخة المحفوظة. تحديث سجل الصف يجلب التقارير والتعديلات الجديدة."
+                        : "تعرض الصفحات النسخة المحفوظة. تحديث بيانات المدرسة يجلب جميع التقارير والتعديلات الجديدة.",
+                      "Pages use your saved copy. Update to receive new reports and corrections.",
                     )}
                   </p>
                 )}
@@ -290,29 +315,29 @@ export function SchoolSnapshotWorkspace({
                   disabled={!ready || busy}
                   onClick={update}
                 >
-                  {t("تحديث بيانات المدرسة", "Update school data")}
+                  {updateLabel}
                 </button>
                 <button
                   className="button"
                   disabled={!bundle || busy || blocked}
                   onClick={() =>
                     setFile({
-                      name: `sprv-general-${bundle.payload.capturedAt.slice(0, 10)}.json`,
+                      name: `sprv-${gradeSnapshot ? "grade-" + bundle.payload.scope.grade : "general"}-${bundle.payload.capturedAt.slice(0, 10)}.json`,
                       blob: new Blob([snapshotBackupText(bundle)], {
                         type: "application/json",
                       }),
                     })
                   }
                 >
-                  {t("تنزيل نسخة احتياطية", "Download backup")}
+                  {backupLabel}
                 </button>
                 <label className="button snapshot-restore-label">
-                  {t("استعادة نسخة احتياطية", "Restore backup")}
+                  {restoreLabel}
                   <input
                     type="file"
                     accept=".json,application/json"
                     disabled={!ready || busy || blocked}
-                    aria-label={t("استعادة نسخة احتياطية", "Restore backup")}
+                    aria-label={restoreLabel}
                     onChange={(e) => {
                       const selected = e.target.files?.[0];
                       e.target.value = "";
@@ -328,7 +353,7 @@ export function SchoolSnapshotWorkspace({
               {!ready
                 ? t("جارٍ فتح النسخة المحفوظة…", "Opening saved snapshot…")
                 : progress
-                  ? `${t("جارٍ تحديث بيانات المدرسة…", "Updating school data…")} ${Math.round((progress.received / progress.total) * 100)}%`
+                  ? `${gradeSnapshot ? t("جارٍ تحديث سجل الصف…", "Updating grade history…") : t("جارٍ تحديث بيانات المدرسة…", "Updating school data…")} ${Math.round((progress.received / progress.total) * 100)}%`
                   : t("جارٍ تجهيز النسخة…", "Preparing snapshot…")}
             </p>
           )}
@@ -347,8 +372,10 @@ export function SchoolSnapshotWorkspace({
               </p>
               <p>
                 {t(
-                  "ستحل هذه النسخة محل نسخة المدرسة المحفوظة على هذا الجهاز.",
-                  "This will replace the school snapshot saved on this device.",
+                  gradeSnapshot
+                    ? "ستحل هذه النسخة محل سجل الصف المحفوظ على هذا الجهاز."
+                    : "ستحل هذه النسخة محل نسخة المدرسة المحفوظة على هذا الجهاز.",
+                  "This will replace the saved history snapshot on this device.",
                 )}
               </p>
               {bundle &&

@@ -20,6 +20,9 @@ export function gradeNumber(value) {
 export const studentGrade = (student) =>
   classKey(student.className).match(/^([6-9])\/\d{1,2}$/)?.[1] || '';
 export const inDirectoryGrade = (student, grade) => !grade || studentGrade(student) === grade;
+// Roster identities are opaque strings, including imported school IDs and aliases.
+export const validStudentId = (value) =>
+  typeof value === 'string' && !!value.trim() && value.length <= 250;
 const nameKey = (value) => normalize(value).replace(/\s+/g, '');
 
 // Stable roster IDs take precedence. Manual names require an unambiguous class

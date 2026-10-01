@@ -495,6 +495,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
 }
 
 export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
+  const { local } = useReads();
   const [kind, setKind] = useState("");
   const page = useHistoryPage(
     "student-history",
@@ -509,9 +510,11 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
         <button className="button" onClick={onBack}>
           {backLabel || t("قائمة الطلبة", "Student list")}
         </button>
-        <button className="button" onClick={page.reload} disabled={page.busy}>
-          {t("تحديث السجل", "Refresh history")}
-        </button>
+        {!local && (
+          <button className="button" onClick={page.reload} disabled={page.busy}>
+            {t("تحديث السجل", "Refresh history")}
+          </button>
+        )}
       </div>
       <PageStatus page={page} t={t} />
       {data && (
@@ -618,6 +621,7 @@ export function StudentDirectory({
   t,
   grade = "",
 }) {
+  const { local } = useReads();
   const page = useHistoryPage(
     "students",
     { query, className, ...(grade ? { grade } : {}) },
@@ -629,9 +633,11 @@ export function StudentDirectory({
     <>
       <div className="page-heading">
         <h1>{t("سجل الطالب", "Student history")}</h1>
-        <button className="button" onClick={page.reload} disabled={page.busy}>
-          {t("تحديث", "Refresh")}
-        </button>
+        {!local && (
+          <button className="button" onClick={page.reload} disabled={page.busy}>
+            {t("تحديث", "Refresh")}
+          </button>
+        )}
       </div>
       <div className="history-search">
         <label className="field">

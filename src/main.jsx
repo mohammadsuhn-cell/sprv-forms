@@ -50,6 +50,7 @@ import {
 import { queueBackup } from "./delivery.js";
 import { StudentHistory } from "./student-history.jsx";
 import { GeneralWorkspace } from "./general-workspace.jsx";
+import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
 import {
   caseReference,
   caseReferenceLabel,
@@ -842,7 +843,7 @@ function App() {
                 : t("النماذج", "Forms")}
           </button>
         )}
-        {page === "student-history" && (
+        {page === "student-history" && (!connected || !delivery.ready) && (
           <StudentHistory
             key={connected?.deviceId || "unpaired"}
             connection={connected}
@@ -852,6 +853,28 @@ function App() {
             t={t}
             onSettings={() => setPage("settings")}
           />
+        )}
+        {connected && delivery.ready && !readOnlyConnection && (
+          <SchoolSnapshotWorkspace
+            key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.grade}:${connected.endpoint}`}
+            connection={connected}
+            lang={data.lang}
+            t={t}
+            active={page === "student-history"}
+            showSettings={page === "settings"}
+            onSettings={() => setPage("settings")}
+          >
+            {page === "student-history" && (
+              <StudentHistory
+                connection={connected}
+                ready={delivery.ready}
+                initialStudentId={historyStudentId}
+                lang={data.lang}
+                t={t}
+                onSettings={() => setPage("settings")}
+              />
+            )}
+          </SchoolSnapshotWorkspace>
         )}
         {readOnlyConnection && (
           <GeneralWorkspace

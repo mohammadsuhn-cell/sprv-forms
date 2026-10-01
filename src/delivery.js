@@ -2,6 +2,10 @@
 // The private signing key is non-exportable and never placed in localStorage or an activation URL.
 import { storageKey, validateStore } from "./model.js";
 import { submissionForm, validCaseReference } from "./case-reference.js";
+import {
+  snapshotOwner,
+  snapshotScope,
+} from "./snapshot-model/school-snapshot.js";
 const databaseName = "sprv-delivery-v1";
 let database;
 const request = (r) =>
@@ -584,18 +588,14 @@ export async function deliveryState() {
   };
 }
 
-// General-supervisor snapshots live separately from drafts, submissions and keys.
-const snapshotAccount = (c) => {
-  if (c?.supervisor?.role !== "general")
-    throw Object.assign(Error("General supervisor required"), {
-      code: "snapshot_scope",
-    });
-  return `${c.serverId}:${c.supervisor.id}`;
-};
+// Read snapshots live separately from drafts, submissions and keys.
+const snapshotAccount = snapshotOwner;
 const assertSnapshotConnection = (current, expected) => {
   if (
     !current ||
     snapshotAccount(current) !== snapshotAccount(expected) ||
+    JSON.stringify(snapshotScope(current)) !==
+      JSON.stringify(snapshotScope(expected)) ||
     current.deviceId !== expected.deviceId ||
     current.endpoint !== expected.endpoint
   )
