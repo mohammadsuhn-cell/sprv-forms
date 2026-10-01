@@ -1,6 +1,43 @@
 import React, { useState } from "react";
 import { FileActions } from "./file-actions.jsx";
 
+export function ExportButtons({ title, formats, busy, onPrepare }) {
+  return (
+    <div className="export-toolbar">
+      <strong>{title}</strong>
+      <div className="history-actions">
+        {formats.map((extension) => (
+          <button
+            className="button"
+            key={extension}
+            disabled={busy}
+            onClick={() => onPrepare(extension)}
+          >
+            {extension === "docx"
+              ? "Word"
+              : extension === "xlsx"
+                ? "Excel"
+                : "PDF"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ExportOptions({ title, formats, busy, onPrepare }) {
+  return (
+    <section className="history-export" aria-label={title}>
+      <ExportButtons
+        title={title}
+        formats={formats}
+        busy={busy}
+        onPrepare={onPrepare}
+      />
+    </section>
+  );
+}
+
 // Both ends operate on one preparation/file state owned by the caller.
 export function ExportPanels({
   title,
@@ -23,28 +60,15 @@ export function ExportPanels({
       data-position={where}
       aria-label={title}
     >
-      <div className="export-toolbar">
-        <strong>{title}</strong>
-        <div className="history-actions">
-          {formats.map((extension) => (
-            <button
-              className="button"
-              key={extension}
-              disabled={busy}
-              onClick={() => {
-                setPosition(where);
-                onPrepare(extension);
-              }}
-            >
-              {extension === "docx"
-                ? "Word"
-                : extension === "xlsx"
-                  ? "Excel"
-                  : "PDF"}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ExportButtons
+        title={title}
+        formats={formats}
+        busy={busy}
+        onPrepare={(extension) => {
+          setPosition(where);
+          onPrepare(extension);
+        }}
+      />
       {where === position && (
         <>
           {busy && (

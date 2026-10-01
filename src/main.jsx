@@ -1,4 +1,8 @@
-import { caseStudentNames, caseClassNames } from "./case-students.js";
+import {
+  caseParticipants,
+  caseStudentNames,
+  caseClassNames,
+} from "./case-students.js";
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -35,6 +39,7 @@ import { validateRoster, rosterGrades, rosterClasses } from "./roster.js";
 import { LateChecklist } from "./roster-ui.jsx";
 import { AbsenceChecklist } from "./absence-ui.jsx";
 import { FileActions } from "./file-actions.jsx";
+import { ExportOptions } from "./export-panels.jsx";
 import { DailyBrief } from "./daily-brief-ui.jsx";
 import { isLinkedDaily, refreshDailyBrief } from "./daily-brief.js";
 import {
@@ -973,6 +978,14 @@ function App() {
                 {t("جديد", "New")}
               </button>
             </div>
+            <ExportOptions
+              title={t("تصدير النموذج", "Export form")}
+              formats={kind === "absence" ? ["pdf"] : ["pdf", "docx", "xlsx"]}
+              busy={!!busy}
+              onPrepare={(extension) =>
+                exportFile(extension === "docx" ? "word" : extension)
+              }
+            />
             <OptionalPanel
               key={form.id}
               initialOpen={!form.supervisor}
@@ -1208,6 +1221,14 @@ function App() {
               </>
             )}
 
+            <ExportOptions
+              title={t("تصدير النموذج", "Export form")}
+              formats={kind === "absence" ? ["pdf"] : ["pdf", "docx", "xlsx"]}
+              busy={!!busy}
+              onPrepare={(extension) =>
+                exportFile(extension === "docx" ? "word" : extension)
+              }
+            />
             {!readyFile && (
               <div className="action-bar">
                 <button
@@ -1219,24 +1240,6 @@ function App() {
                     ? t("حفظ الحالة", "Save record")
                     : t("حفظ النموذج", "Save form")}
                 </button>
-                <details className="export-menu">
-                  <summary className="button">{t("تصدير", "Export")}</summary>
-                  <div>
-                    {(kind === "absence"
-                      ? ["pdf"]
-                      : ["pdf", "word", "xlsx"]
-                    ).map((type) => (
-                      <button
-                        key={type}
-                        className="button"
-                        disabled={!!busy}
-                        onClick={() => exportFile(type)}
-                      >
-                        {type === "word" ? "Word" : type.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </details>
               </div>
             )}
           </>
@@ -1264,18 +1267,16 @@ function App() {
                 />{" "}
                 {t("متابعات مستحقة", "Follow-ups due")}
               </label>
-              <button
-                className="button"
-                disabled={
-                  !!busy || !visibleSaved.some((s) => s.kind === "case")
-                }
-                onClick={() =>
-                  exportFile("xlsx", caseRegister(visibleSaved, data.profile))
-                }
-              >
-                {t("تصدير Excel", "Export Excel")}
-              </button>
             </div>
+
+            <ExportOptions
+              title={t("تصدير سجل الحالات", "Export case register")}
+              formats={["xlsx"]}
+              busy={!!busy || !visibleSaved.some((s) => s.kind === "case")}
+              onPrepare={() =>
+                exportFile("xlsx", caseRegister(visibleSaved, data.profile))
+              }
+            />
 
             <section className="panel saved-list">
               {visibleSaved.map((s) => (
@@ -1287,6 +1288,14 @@ function App() {
                 </p>
               )}
             </section>
+            <ExportOptions
+              title={t("تصدير سجل الحالات", "Export case register")}
+              formats={["xlsx"]}
+              busy={!!busy || !visibleSaved.some((s) => s.kind === "case")}
+              onPrepare={() =>
+                exportFile("xlsx", caseRegister(visibleSaved, data.profile))
+              }
+            />
           </>
         )}
         {page === "settings" && (
@@ -1553,10 +1562,19 @@ function App() {
   );
   function SavedRow({ item, remove = false }) {
     const receipt = delivery.records.find((r) => r.formId === item.id);
+    const participants =
+      item.kind === "case"
+        ? caseParticipants(item).filter((s) => s.student)
+        : [];
+    const studentLabel =
+      participants.length > 1
+        ? `${participants[0].student} · +${participants.length - 1}`
+        : participants[0]?.student || item.student;
     return (
       <div className="saved-row">
         <button
           className="saved-open"
+          title={participants.length > 1 ? caseStudentNames(item) : undefined}
           disabled={!!receipt?.withdrawalRequestedAt}
           onClick={() => {
             const existing = data.drafts[item.kind];
@@ -1578,10 +1596,7 @@ function App() {
           }}
         >
           <div>
-            <strong>
-              {(item.kind === "case" ? caseStudentNames(item) : item.student) ||
-                titles[item.kind][en ? 1 : 0]}
-            </strong>
+            <strong>{studentLabel || titles[item.kind][en ? 1 : 0]}</strong>
             <span>
               {dateLabel(item.date)} ·{" "}
               {(["absence", "daily", "staffing"].includes(item.kind)
@@ -1597,19 +1612,15 @@ function App() {
                 </span>
               )}
             </span>
-            {item.syncSupervisorId && (
+            {item.syncSupervisorId && !receipt?.withdrawalRequestedAt && (
               <span className="record-delivery">
-                {receipt?.withdrawalRequestedAt
-                  ? receipt.withdrawn
-                    ? t("تم سحب التقرير", "Report withdrawn")
-                    : t("بانتظار تأكيد السحب", "Awaiting withdrawal")
-                  : receipt?.blocked
-                    ? t("تحتاج مراجعة", "Needs review")
-                    : receipt?.pending ||
-                        !receipt?.receipt ||
-                        receipt.savedAt !== item.savedAt
-                      ? t("بانتظار الإرسال", "Awaiting delivery")
-                      : t("تم الاستلام", "Received")}
+                {receipt?.blocked
+                  ? t("تحتاج مراجعة", "Needs review")
+                  : receipt?.pending ||
+                      !receipt?.receipt ||
+                      receipt.savedAt !== item.savedAt
+                    ? t("بانتظار الإرسال", "Awaiting delivery")
+                    : t("تم الاستلام", "Received")}
                 {receipt?.receipt &&
                   !receipt.pending &&
                   receipt.savedAt === item.savedAt && (
@@ -1635,37 +1646,39 @@ function App() {
             )}
           </div>
         </button>
-        {remove && receipt && (
-          <WithdrawalAction record={receipt} delivery={delivery} t={t} />
-        )}
         {remove && (
-          <button
-            className="text-control danger"
-            aria-label={t("حذف النسخة", "Delete saved copy")}
-            onClick={() => {
-              if (
-                confirm(
-                  item.syncSupervisorId
-                    ? t(
-                        "حذف النسخة من هذا الجهاز؟ تبقى النسخة الواردة وسجل الإرسال لدى الإشراف العام.",
-                        "Delete this device copy? The general supervisor retains received records and pending delivery continues.",
-                      )
-                    : t("حذف النسخة المحفوظة؟", "Delete this saved copy?"),
-                )
-              ) {
-                const persisted = setData((d) => ({
-                  ...d,
-                  saved: d.saved.filter((s) => s.id !== item.id),
-                }));
-                if (persisted)
-                  notify(t("تم حذف النسخة المحفوظة", "Saved copy deleted"));
-              }
-            }}
-          >
-            {item.syncSupervisorId
-              ? t("حذف من الجهاز", "Remove from device")
-              : t("حذف", "Delete")}
-          </button>
+          <div className="saved-row-actions">
+            {receipt && (
+              <WithdrawalAction record={receipt} delivery={delivery} t={t} />
+            )}
+            <button
+              className="text-control danger"
+              aria-label={t("حذف النسخة", "Delete saved copy")}
+              onClick={() => {
+                if (
+                  confirm(
+                    item.syncSupervisorId
+                      ? t(
+                          "حذف النسخة من هذا الجهاز؟ تبقى النسخة الواردة وسجل الإرسال لدى الإشراف العام.",
+                          "Delete this device copy? The general supervisor retains received records and pending delivery continues.",
+                        )
+                      : t("حذف النسخة المحفوظة؟", "Delete this saved copy?"),
+                  )
+                ) {
+                  const persisted = setData((d) => ({
+                    ...d,
+                    saved: d.saved.filter((s) => s.id !== item.id),
+                  }));
+                  if (persisted)
+                    notify(t("تم حذف النسخة المحفوظة", "Saved copy deleted"));
+                }
+              }}
+            >
+              {item.syncSupervisorId
+                ? t("حذف من الجهاز", "Remove from device")
+                : t("حذف", "Delete")}
+            </button>
+          </div>
         )}
       </div>
     );

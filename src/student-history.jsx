@@ -30,6 +30,21 @@ export function readError(error, t) {
       "تأكد من ضبط وقت الجهاز ثم أعد المحاولة.",
       "Check your device clock and retry.",
     );
+  if (error.code === "read_timeout" || error.code === "read_network")
+    return t(
+      "تعذّر الاتصال بجهاز الاستقبال. على المشرف العام التأكد من تشغيل جهاز الاستقبال والاتصال، ثم أعد المحاولة.",
+      "Cannot reach the receiver. Ask general supervision to check the receiver and its connection, then retry.",
+    );
+  if (error.status === 429)
+    return t(
+      "طلبات كثيرة خلال دقيقة. انتظر قليلًا ثم أعد المحاولة.",
+      "Too many requests this minute. Wait briefly, then retry.",
+    );
+  if (error.status >= 500)
+    return t(
+      "حدث خطأ في جهاز الاستقبال. اطلب من المشرف العام فحصه ثم أعد المحاولة.",
+      "The receiver encountered an error. Ask general supervision to check it, then retry.",
+    );
   if (error.status === 401 || error.code === "unpaired")
     return t(
       "اتصال هذا الجهاز غير مفعل. راجع الإعدادات أو اطلب رابط تفعيل جديدًا.",

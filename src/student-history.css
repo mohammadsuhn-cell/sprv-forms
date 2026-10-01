@@ -117,6 +117,16 @@
   margin-block: 16px;
   background: #fafbf9;
 }
+.export-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.export-toolbar .history-actions {
+  margin: 0;
+}
 .history-export > strong {
   display: block;
 }

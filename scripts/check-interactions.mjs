@@ -152,13 +152,17 @@ try {
   await page
     .getByLabel("بحث في المحفوظات", { exact: true })
     .fill("لا يوجد هذا الاسم");
-  await expect(button(page, "تصدير Excel")).toBeDisabled();
+  const registerExport = page
+    .getByRole("region", { name: "تصدير سجل الحالات" })
+    .first()
+    .getByRole("button", { name: "Excel", exact: true });
+  await expect(registerExport).toBeDisabled();
   await expect(page.locator(".saved-open")).toHaveCount(0);
   await page.getByLabel("بحث في المحفوظات", { exact: true }).fill("طالب معدل");
   await page.getByLabel("متابعات مستحقة", { exact: true }).check();
   await expect(page.locator(".saved-open")).toHaveCount(1);
-  await expect(button(page, "تصدير Excel")).toBeEnabled();
-  await button(page, "تصدير Excel").click();
+  await expect(registerExport).toBeEnabled();
+  await registerExport.click();
   await download(page, () => button(page, "تنزيل الملف").click());
   // Unsupported native sharing falls back to a download; supported sharing and cancellation.
   await page.evaluate(() =>

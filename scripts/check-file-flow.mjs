@@ -23,6 +23,11 @@ const server = spawn(
   { stdio: "pipe" },
 );
 const button = (page, name) => page.getByRole("button", { name, exact: true });
+const exportButton = (page, name, english = false) =>
+  page
+    .getByRole("region", { name: english ? "Export form" : "تصدير النموذج" })
+    .first()
+    .getByRole("button", { name, exact: true });
 const fixture = emptyStore();
 fixture.profile.supervisor = "مشرف تجريبي";
 fixture.drafts.case = {
@@ -106,8 +111,7 @@ try {
         document.fonts.load = load;
       };
     });
-    await page.locator(".export-menu summary").click();
-    await button(page, "PDF").click();
+    await exportButton(page, "PDF").click();
     await expect(button(page, "تنزيل الملف")).toBeVisible({ timeout: 30000 });
     assert.equal(
       downloads.length,
@@ -191,9 +195,8 @@ try {
       fixture.drafts.case.student,
     );
     await page.evaluate(() => window.restoreFonts());
-    for (const name of ["Word", "XLSX"]) {
-      await page.locator(".export-menu summary").click();
-      await button(page, name).click();
+    for (const name of ["Word", "Excel"]) {
+      await exportButton(page, name).click();
       await expect(button(page, "تنزيل الملف")).toBeVisible({ timeout: 30000 });
       await expect(
         page.getByRole("link", { name: "فتح في تبويب جديد", exact: true }),
@@ -220,8 +223,7 @@ try {
         return load(...args);
       };
     });
-    await page.locator(".export-menu summary").click();
-    await button(page, "PDF").click();
+    await exportButton(page, "PDF").click();
     await page
       .getByLabel("اسم الطالب", { exact: true })
       .fill("اسم معدل أثناء التجهيز");
@@ -230,7 +232,7 @@ try {
     });
     await expect(page.locator(".file-ready")).toHaveCount(0);
     await button(page, "EN").click();
-    await button(page, "PDF").click();
+    await exportButton(page, "PDF", true).click();
     await expect(button(page, "Download file")).toBeVisible({ timeout: 30000 });
     await expect(
       page.getByRole("link", { name: "Open in new tab", exact: true }),
@@ -248,8 +250,7 @@ try {
       await page.reload();
       await button(page, "Record a case").click();
     }
-    await page.locator(".export-menu summary").click();
-    await button(page, "PDF").click();
+    await exportButton(page, "PDF", true).click();
     await expect(button(page, "Download file")).toBeVisible({ timeout: 30000 });
     assert.equal(page.url(), url);
     assert.deepEqual(errors, []);

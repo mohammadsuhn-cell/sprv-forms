@@ -195,10 +195,19 @@ async function signedRead(action, params) {
       ),
     ),
   );
-  const data = await post(connection.endpoint, "/v1/" + action, {
-    message,
-    signature,
-  });
+  let data;
+  try {
+    data = await post(connection.endpoint, "/v1/" + action, {
+      message,
+      signature,
+    });
+  } catch (error) {
+    if (error.name === "TimeoutError" || error.name === "AbortError")
+      throw Object.assign(error, { code: "read_timeout" });
+    if (error instanceof TypeError)
+      throw Object.assign(error, { code: "read_network" });
+    throw error;
+  }
   const current = await readSetting("connection");
   if (
     !current ||

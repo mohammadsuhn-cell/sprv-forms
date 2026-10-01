@@ -294,16 +294,6 @@
   cursor: pointer;
   color: var(--muted);
 }
-.export-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.export-toolbar .history-actions {
-  margin: 0;
-}
 .history-export[data-position] {
   padding: 12px 16px;
   margin: 12px 0;

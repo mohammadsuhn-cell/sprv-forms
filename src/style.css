@@ -321,7 +321,7 @@ h2 {
 }
 .saved-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   border-bottom: 1px solid var(--line);
   gap: 10px;
   background: #fff;
@@ -343,6 +343,13 @@ h2 {
 }
 .saved-open > div {
   min-width: 0;
+}
+.saved-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 .saved-open strong {
   font-weight: 600;
@@ -843,33 +850,9 @@ h2 {
 .record-tools input {
   accent-color: var(--ink);
 }
-.export-menu {
-  position: relative;
-}
-.export-menu summary {
-  list-style: none;
-  cursor: pointer;
-}
-.export-menu > div {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  inset-inline-end: 0;
-  background: #fff;
-  border: 1px solid var(--line);
-  padding: 8px;
-  display: grid;
-  gap: 8px;
-  box-shadow: 0 5px 18px #0001;
-}
-.export-menu summary::-webkit-details-marker {
-  display: none;
-}
 .action-bar .primary {
   flex: 1;
   max-width: 460px;
-}
-.export-menu .button {
-  min-width: 100px;
 }
 .saved-open span {
   font-size: 14px;
@@ -878,11 +861,18 @@ h2 {
   margin: 16px 0;
 }
 @media (max-width: 600px) {
-  .action-bar > .export-menu {
-    flex: 0 0 100px;
+  .saved-row {
+    flex-direction: column;
+    gap: 0;
   }
-  .export-menu summary {
+  .saved-open {
     width: 100%;
+  }
+  .saved-row-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
   }
 }
 .school-identity {
