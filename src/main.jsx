@@ -5,6 +5,7 @@ import {
 } from "./case-students.js";
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
+import { useWorkspaceLock } from "./workspace-lock.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/noto-sans-arabic/400.css";
@@ -165,7 +166,22 @@ function App() {
   const en = data.lang === "en",
     t = (ar, english) => (en ? english : ar),
     form = data.drafts[kind];
-  const delivery = useDelivery(data.saved, writeAllowed && !storageError);
+  const workspace = useWorkspaceLock(() => {
+    const latest = read();
+    currentData.current = latest.data;
+    updateData(latest.data);
+    setWriteAllowed(!latest.error);
+    setStorageError(latest.error);
+    setReadyFile(null);
+    setErrors([]);
+    exportRevision.current++;
+    setPage(activationFragment ? "settings" : "home");
+    setKind("");
+  });
+  const delivery = useDelivery(
+    data.saved,
+    workspace.status === "ready" && writeAllowed && !storageError,
+  );
   const connected = delivery.connection;
   const readOnlyConnection = connected?.supervisor.role === "general";
   useEffect(() => {
@@ -183,19 +199,20 @@ function App() {
     setPage("student-history");
   }
   useEffect(() => {
-    if (!writeAllowed || storageError) return;
+    if (!workspace.owner.current || !writeAllowed || storageError) return;
     const next = withReceivedReferences(currentData.current, delivery.records);
     if (next !== currentData.current) setData(next);
-  }, [delivery.records, writeAllowed, storageError]);
+  }, [delivery.records, writeAllowed, storageError, workspace.status]);
   useEffect(() => {
     if (
+      workspace.owner.current &&
       connected &&
       (currentData.current.profile.syncSupervisorId !==
         connected.supervisor.id ||
         currentData.current.profile.grade !== connected.supervisor.grade)
     )
       activateProfile(connected);
-  }, [connected?.supervisor.id]);
+  }, [connected?.supervisor.id, workspace.status]);
   const earlierForms =
     connected && !readOnlyConnection
       ? data.saved.filter(
@@ -251,6 +268,7 @@ function App() {
   // Persist during the action itself, including each settings keystroke.
   // Keep unsaved edits in memory if storage is unavailable, but never report success.
   function setData(value, allowReset = false) {
+    if (!workspace.owner.current) return false;
     const next =
       typeof value === "function" ? value(currentData.current) : value;
     let persisted = false;
@@ -766,6 +784,34 @@ function App() {
           s.due <= today() &&
           !["مغلقة", "تمت المتابعة"].includes(s.status))),
   );
+  if (workspace.status !== "ready")
+    return (
+      <main className="content">
+        <section className="panel workspace-access" aria-live="polite">
+          <h1>{t("نماذج الإشراف", "Supervision forms")}</h1>
+          {workspace.status === "opening" ? (
+            <p>{t("جارٍ فتح السجلات…", "Opening records…")}</p>
+          ) : (
+            <>
+              <p role="alert">
+                {workspace.status === "busy"
+                  ? t(
+                      "النماذج مفتوحة في تبويب آخر. أكمل العمل هناك، أو أغلقه ثم افتح النماذج هنا. سجلاتك محفوظة.",
+                      "Forms are open in another tab. Continue there, or close it and open forms here. Your saved records are kept.",
+                    )
+                  : t(
+                      "تعذّر فتح السجلات بأمان. أعد المحاولة في إصدار حديث من Safari أو Chrome.",
+                      "Could not safely open the records. Retry in an up-to-date Safari or Chrome browser.",
+                    )}
+              </p>
+              <button className="button primary" onClick={workspace.retry}>
+                {t("فتح النماذج هنا", "Open forms here")}
+              </button>
+            </>
+          )}
+        </section>
+      </main>
+    );
   return (
     <>
       <header className="topbar">

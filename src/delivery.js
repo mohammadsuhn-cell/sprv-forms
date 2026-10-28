@@ -336,7 +336,17 @@ export async function queueWithdrawal(formId) {
     row.withdrawalRequestedAt = new Date().toISOString();
     row.updatedAt = row.withdrawalRequestedAt;
     row.fingerprint = `withdraw:${row.withdrawalRequestedAt}`;
-    if (!row.job) row.job = jobFor(row, connection);
+    if (
+      !row.job ||
+      (row.receipt && [400, 403, 413].includes(row.errorStatus))
+    ) {
+      // A definitively rejected correction never committed. Withdraw the last
+      // acknowledged revision instead of retrying that rejected correction.
+      // Uncertain/lost responses still retain their exact original packet.
+      row.job = jobFor(row, connection);
+      row.error = "";
+      row.errorStatus = null;
+    }
     await request(s.put(row));
   });
 }

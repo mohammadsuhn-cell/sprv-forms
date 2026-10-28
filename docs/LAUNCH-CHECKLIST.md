@@ -1,5 +1,20 @@
 # Forms-link launch checklist
 
+## 28 October 2026: Grade 8 readiness verification
+
+The checks below supersede the older implementation status in this document. Physical phone/carrier validation remains a separate acceptance step.
+
+- Verified the existing private Grade 8 import file against the current local register: 155 students in seven classes, with matching internal IDs, names and classes. No civil IDs are present in the import file. Keep it outside this repository.
+- Fixed a stale-tab overwrite that could lose saved records or drafts. Chrome and Safari-engine checks cover exclusive editing, ownership transfer, current settings and fast back/forward navigation.
+- Fixed withdrawal after a correction is definitively rejected; uncertain/lost responses retain their original retry packet. Isolated checks cover 400, 403 and 413 rejections.
+- Passed the complete synthetic Grade 8 workflow: activation, roster import, all five forms, receipts, shared case references, linked daily totals, grade isolation, offline history across all roster pages, profile PDF/Word/Excel and an offline correction sent after browser reopening.
+- Passed production/mobile interactions, roster, absence, daily aggregation, backup/recovery, general-supervisor snapshots and Chrome/Safari-engine file and connection checks. Local register browser tests pass.
+- Both local services and the public HTTPS receiver respond. Idle-sleep protection runs with the receiver; keep the Mac lid open and connected to power and internet.
+
+Before handing over each phone: close old forms tabs, open the current link in the usual browser, activate it for Grade 8, import the private roster, and choose **تحديث سجل الصف** in Student history. Viewing history alone does not save an offline copy. Confirm delivery from a real phone using mobile data, then reopen its saved history offline and open an exported file. Automated browser checks do not replace this physical-device trial.
+
+The checklist below is retained as historical planning; unchecked historical implementation items should be read together with the verification above.
+
 Prepared 24 September 2026; updated 25 September 2026. Completed implementation items are marked below. Remaining items cover physical phone trials and school handover.
 
 26 September update: the optional receiver connection is implemented and public HTTPS is verified; the earlier unsynchronized launch boundary below is historical. The user activated a physical phone through an inbox-generated link, and one saved late-students form reached the laptop with a receipt and a validated local backup. Unactivated browsers still work locally. Before enabling colleagues, confirm carrier-data-only delivery, physical-phone offline retry and revocation. Full roster/settings synchronization and selective supervisor recovery are still deferred. See `CONNECTION.md`.

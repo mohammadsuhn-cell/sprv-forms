@@ -18,7 +18,7 @@ const server = spawn(
   ],
   { stdio: "pipe" },
 );
-const button = (p, name) => p.getByRole("button", { name, exact: true });
+const button = (p, name) => p.getByRole("button", { name, exact: true }).first();
 const state = (p) =>
   p.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
 let browser;
@@ -148,8 +148,9 @@ try {
   });
   await button(page, "حفظ النموذج").click();
   await page.locator(".saved-open").first().click();
-  await page.locator(".export-menu summary").click();
-  assert.equal(await page.locator(".export-menu button").count(), 1);
+  await expect(page.getByRole("button", { name: "PDF", exact: true })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Word", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Excel", exact: true })).toHaveCount(0);
   async function exportPdf(path) {
     await page.evaluate(() => {
       window.drawn = [];
@@ -210,7 +211,6 @@ try {
   );
   await page.reload();
   await button(page, "إحصائية الغياب اليومي").click();
-  await page.locator(".export-menu summary").click();
   const longDrawn = await exportPdf("test-results/absence-long.pdf");
   assert(new Set(longDrawn.map((d) => d.page)).size > 1);
   const stamps = longDrawn.filter((d) => d.text.includes("تاريخ التصدير:"));
@@ -280,7 +280,6 @@ try {
   await page.reload();
   await button(page, "إحصائية الغياب اليومي").click();
   await ctx.setOffline(true);
-  await page.locator(".export-menu summary").click();
   const tenDrawn = await exportPdf("test-results/absence-ten-classes.pdf");
   assert.equal(new Set(tenDrawn.map((d) => d.page)).size, 2);
   assert.equal(tenDrawn.filter((d) => d.text.startsWith("الشعبة ")).length, 10);

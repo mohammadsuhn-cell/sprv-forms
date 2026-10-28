@@ -107,7 +107,7 @@ try {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller);
-  assert.equal(await page.locator(".form-card").count(), 5);
+  assert.equal(await page.locator(".form-card").count(), 6);
   assert.equal(
     await page.getByText("التقرير اليومي للإشراف", { exact: true }).count(),
     0,
@@ -228,14 +228,13 @@ try {
     storageKey,
   );
   assert.equal(persistedCase.description, exportDescription);
-  await page.getByText("تصدير", { exact: true }).click();
   for (const [label, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
-    ["XLSX", "xlsx"],
+    ["Excel", "xlsx"],
   ]) {
     const waiting = page.waitForEvent("download", { timeout: 60000 });
-    await page.getByRole("button", { name: label, exact: true }).click();
+    await page.getByRole("button", { name: label, exact: true }).first().click();
     await downloadPrepared(page);
     await (await waiting).saveAs(`test-results/simple-case.${ext}`);
   }
@@ -266,7 +265,7 @@ try {
   await page.getByLabel("متابعات مستحقة", { exact: true }).check();
   assert.equal(await page.locator(".saved-open").count(), 1);
   const register = page.waitForEvent("download");
-  await page.getByRole("button", { name: "تصدير Excel", exact: true }).click();
+  await page.getByRole("button", { name: "Excel", exact: true }).first().click();
   await downloadPrepared(page);
   await (await register).saveAs("test-results/simple-register.xlsx");
   await page.getByRole("button", { name: "الإعدادات", exact: true }).click();
@@ -274,9 +273,8 @@ try {
   await page
     .getByRole("button", { name: "سجل الحالات والمتابعة", exact: true })
     .click();
-  await page.getByText("تصدير", { exact: true }).click();
   const longDownload = page.waitForEvent("download", { timeout: 120000 });
-  await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await page.getByRole("button", { name: "PDF", exact: true }).first().click();
   await downloadPrepared(page);
   await (await longDownload).saveAs("test-results/long-register.pdf");
   assert(
@@ -294,16 +292,14 @@ try {
   await ctx.setOffline(true);
   await page.reload();
   await page.getByRole("heading", { name: "Forms", exact: true }).waitFor();
-  await page
-    .getByRole("button", { name: "Record a case", exact: true })
-    .click();
+  await page.getByRole("button", { name: /Records & follow-up/ }).click();
+  await page.locator(".saved-open").click();
   assert.equal(
     await page.getByLabel("Student name", { exact: true }).inputValue(),
     "عبدالرحمن عبدالله طالب تجريبي",
   );
-  await page.getByText("Export", { exact: true }).click();
   const offline = page.waitForEvent("download");
-  await page.getByRole("button", { name: "PDF", exact: true }).click();
+  await page.getByRole("button", { name: "PDF", exact: true }).first().click();
   await downloadPrepared(page);
   await (await offline).saveAs("test-results/offline-case.pdf");
   const data = await page.evaluate(
@@ -347,14 +343,13 @@ try {
     .fill("تعطل التكييف، تم إبلاغ الصيانة.");
   await entry.getByRole("button", { name: "حفظ النموذج", exact: true }).click();
   await entry.locator(".saved-open").click();
-  await entry.getByText("تصدير", { exact: true }).click();
   for (const [label, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
-    ["XLSX", "xlsx"],
+    ["Excel", "xlsx"],
   ]) {
     const waiting = entry.waitForEvent("download", { timeout: 60000 });
-    await entry.getByRole("button", { name: label, exact: true }).click();
+    await entry.getByRole("button", { name: label, exact: true }).first().click();
     await downloadPrepared(entry);
     await (await waiting).saveAs(`test-results/daily-brief.${ext}`);
   }
@@ -391,9 +386,8 @@ try {
   await entry
     .getByLabel("حالة التغطية", { exact: true })
     .selectOption("حضر البديل");
-  await entry.getByText("تصدير", { exact: true }).click();
   const coverPdf = entry.waitForEvent("download");
-  await entry.getByRole("button", { name: "PDF", exact: true }).click();
+  await entry.getByRole("button", { name: "PDF", exact: true }).first().click();
   await downloadPrepared(entry);
   await (await coverPdf).saveAs("test-results/teacher-log.pdf");
   assert(
@@ -455,14 +449,13 @@ try {
     .locator(".saved-open")
     .filter({ hasText: "الطلبة المتأخرون" })
     .click();
-  await entry.getByText("تصدير", { exact: true }).click();
   for (const [label, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
-    ["XLSX", "xlsx"],
+    ["Excel", "xlsx"],
   ]) {
     const waiting = entry.waitForEvent("download", { timeout: 60000 });
-    await entry.getByRole("button", { name: label, exact: true }).click();
+    await entry.getByRole("button", { name: label, exact: true }).first().click();
     await downloadPrepared(entry);
     await (await waiting).saveAs(`test-results/late-students.${ext}`);
   }

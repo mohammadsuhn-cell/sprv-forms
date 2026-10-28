@@ -20,7 +20,7 @@ const server = spawn(
   ],
   { stdio: "pipe" },
 );
-const button = (page, name) => page.getByRole("button", { name, exact: true });
+const button = (page, name) => page.getByRole("button", { name, exact: true }).first();
 const state = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
 let browser;
@@ -84,18 +84,16 @@ try {
   const savedBrief = (await state(page)).saved.find((s) => s.kind === "daily");
   await button(page, "النماذج").click();
   await button(page, "الموجز اليومي").click();
-  await page.getByText("تصدير", { exact: true }).click();
   for (const [label, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
-    ["XLSX", "xlsx"],
+    ["Excel", "xlsx"],
   ]) {
     await button(page, label).click();
     const downloaded = page.waitForEvent("download");
     await button(page, "تنزيل الملف").click();
     await (await downloaded).saveAs(`test-results/linked-daily.${ext}`);
     await button(page, "إغلاق خيارات الملف").click();
-    await page.locator(".export-menu summary").click();
   }
   const word = execFileSync(
     "unzip",

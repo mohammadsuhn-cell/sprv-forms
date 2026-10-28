@@ -32,7 +32,7 @@ const fixture = {
 };
 const errors = [],
   uploads = [];
-const button = (page, name) => page.getByRole("button", { name, exact: true });
+const button = (page, name) => page.getByRole("button", { name, exact: true }).first();
 const state = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
 const file = (value) => ({
@@ -50,10 +50,9 @@ async function importRoster(page, value, accept = true) {
 async function download(page, name, output) {
   const pending = page.waitForEvent("download", { timeout: 60000 });
   await button(page, name).click();
-  if (["PDF", "Word", "XLSX"].includes(name)) {
+  if (["PDF", "Word", "Excel"].includes(name)) {
     await button(page, "تنزيل الملف").click();
     await button(page, "إغلاق خيارات الملف").click();
-    await page.locator(".export-menu summary").click();
   }
   const result = await pending;
   assert.equal(await result.failure(), null);
@@ -177,12 +176,11 @@ try {
   assert.equal((await state(page)).drafts.late.students.length, 14);
   await button(page, "حفظ النموذج").click();
   await page.locator(".saved-open").click();
-  await page.getByText("تصدير", { exact: true }).click();
   fs.mkdirSync("test-results", { recursive: true });
   for (const [name, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
-    ["XLSX", "xlsx"],
+    ["Excel", "xlsx"],
   ])
     await download(page, name, `test-results/roster-late.${ext}`);
   const drawn = await page.evaluate(() => window.drawn.join("\n"));
