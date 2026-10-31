@@ -347,8 +347,8 @@ function App() {
     if (readOnlyConnection) return;
     setKind(k);
     const existing = data.drafts[k];
-    const savedCase =
-      k === "case" &&
+    // Resume unfinished work, but don't reuse a completed record for new entry.
+    const unchangedSavedForm =
       existing &&
       data.saved.some(
         (saved) =>
@@ -357,7 +357,9 @@ function App() {
             JSON.stringify(submissionForm(existing)),
       );
     const base =
-      existing && !savedCase ? existing : newForm(k, data.profile, data.roster);
+      existing && !unchangedSavedForm
+        ? existing
+        : newForm(k, data.profile, data.roster);
     const draft =
       connected && !base.savedAt && !base.syncSupervisorId
         ? { ...base, syncSupervisorId: connected.supervisor.id }

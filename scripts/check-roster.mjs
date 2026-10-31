@@ -32,7 +32,8 @@ const fixture = {
 };
 const errors = [],
   uploads = [];
-const button = (page, name) => page.getByRole("button", { name, exact: true }).first();
+const button = (page, name) =>
+  page.getByRole("button", { name, exact: true }).first();
 const state = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
 const file = (value) => ({
@@ -270,7 +271,11 @@ try {
   await page.waitForFunction(() => navigator.serviceWorker.controller);
   await ctx.setOffline(true);
   await page.reload();
-  await button(page, "الطلبة المتأخرون").click();
+  await page.getByRole("button", { name: /^السجلات والمتابعة/ }).click();
+  await page
+    .locator(".saved-open")
+    .filter({ hasText: "الطلبة المتأخرون" })
+    .click();
   assert.equal((await state(page)).drafts.late.students.length, 14);
   assert(
     await page.evaluate(
@@ -295,7 +300,11 @@ try {
   assert.equal((await state(page)).roster, null);
   assert.equal((await state(page)).saved.length, 2);
   await button(page, "Forms").click();
-  await button(page, "Late students").click();
+  await page.getByRole("button", { name: /^Records & follow-up/ }).click();
+  await page
+    .locator(".saved-open")
+    .filter({ hasText: "Late students" })
+    .click();
   await expect(
     page.getByRole("checkbox", { name: fixture.students[0].name, exact: true }),
   ).toBeChecked();

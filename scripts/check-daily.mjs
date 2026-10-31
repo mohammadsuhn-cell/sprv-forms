@@ -20,7 +20,8 @@ const server = spawn(
   ],
   { stdio: "pipe" },
 );
-const button = (page, name) => page.getByRole("button", { name, exact: true }).first();
+const button = (page, name) =>
+  page.getByRole("button", { name, exact: true }).first();
 const state = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
 let browser;
@@ -82,8 +83,10 @@ try {
   );
   await button(page, "حفظ النموذج").click();
   const savedBrief = (await state(page)).saved.find((s) => s.kind === "daily");
-  await button(page, "النماذج").click();
-  await button(page, "الموجز اليومي").click();
+  await page
+    .locator(".saved-open")
+    .filter({ hasText: "الموجز اليومي" })
+    .click();
   for (const [label, ext] of [
     ["PDF", "pdf"],
     ["Word", "docx"],
@@ -138,7 +141,11 @@ try {
     localStorage.setItem(key, JSON.stringify(data));
   }, storageKey);
   await page.reload();
-  await button(page, "الموجز اليومي").click();
+  await page.getByRole("button", { name: /^السجلات والمتابعة/ }).click();
+  await page
+    .locator(".saved-open")
+    .filter({ hasText: "الموجز اليومي" })
+    .click();
   assert.deepEqual((await state(page)).drafts.daily, savedBrief);
   await expect(
     page.getByText("توجد بيانات أحدث", { exact: true }),

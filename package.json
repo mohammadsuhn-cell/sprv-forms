@@ -16,7 +16,8 @@
     "check:file-flow": "node scripts/check-file-flow.mjs",
     "check:absence": "node scripts/check-absence.mjs",
     "check:daily": "node scripts/check-daily.mjs",
-    "check:tabs": "node scripts/check-workspace-tabs.mjs"
+    "check:tabs": "node scripts/check-workspace-tabs.mjs",
+    "check:new-forms": "node scripts/check-new-forms.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-arabic": "5.3.0",
