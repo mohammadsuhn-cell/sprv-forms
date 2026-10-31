@@ -1,3 +1,4 @@
+import { shortCaseReference } from "./case-reference.js";
 import React, {
   createContext,
   useContext,
@@ -124,7 +125,7 @@ export function ReviewBadge({ t, onOpen }) {
   const unread = Object.values(ctx.data.threads).filter((t) => t.unread).length;
   return (
     <button className="button" onClick={onOpen}>
-      {t("ملاحظات الإشراف العام", "General-supervisor notes")}{" "}
+      {t("المتابعات", "Follow-ups")}{" "}
       {unread > 0 && <span className="count">{unread}</span>}
     </button>
   );
@@ -258,7 +259,7 @@ function Thread({ thread, t }) {
     >
       <summary>
         <strong>
-          {thread.source?.reference ||
+          {shortCaseReference(thread.source?.reference) ||
             titles[thread.source?.kind]?.[0] ||
             t("تقرير", "Report")}
         </strong>{" "}
@@ -432,66 +433,64 @@ export function ReviewPanel({
     !recordId.startsWith(ctx.connection.supervisor.id + ":");
   return (
     <section className="review-panel">
-      <h2>
-        {t(
-          "ملاحظات الإشراف العام والمتابعة",
-          "General-supervisor notes and follow-up",
-        )}
-      </h2>
+      <h2>{t("الملاحظات والمتابعة", "Notes and follow-up")}</h2>
       {!recordId && !studentId && (
-        <div className="history-actions">
-          <button
-            className="button"
-            onClick={async () => {
-              try {
-                const backup = await pendingReviewBackup(ctx.connection);
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(backup, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "sprv-pending-notes-" + today() + ".json";
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 60000);
-              } catch (e) {
-                setBackupError(e.message);
-              }
-            }}
-          >
-            {t(
-              "نسخة للمسودات والرسائل المنتظرة",
-              "Back up drafts and pending notes",
-            )}
-          </button>
-          <button className="button" onClick={() => restore.current.click()}>
-            {t("استعادة مسودات المتابعات", "Restore review drafts")}
-          </button>
-          <input
-            hidden
-            ref={restore}
-            type="file"
-            accept=".json,application/json"
-            aria-label={t("نسخة مسودات المتابعة", "Review drafts backup")}
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              try {
-                if (file.size > 15000000) throw Error("الملف كبير");
-                await restorePendingReviews(
-                  ctx.connection,
-                  JSON.parse(await file.text()),
-                );
-                setBackupError("");
-              } catch (e) {
-                setBackupError(e.message);
-              }
-            }}
-          />
-          {backupError && <p role="alert">{backupError}</p>}
-        </div>
+        <details className="review-backups">
+          <summary>{t("نسخ احتياطي", "Backup")}</summary>
+          <div className="history-actions">
+            <button
+              className="button"
+              onClick={async () => {
+                try {
+                  const backup = await pendingReviewBackup(ctx.connection);
+                  const url = URL.createObjectURL(
+                    new Blob([JSON.stringify(backup, null, 2)], {
+                      type: "application/json",
+                    }),
+                  );
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "sprv-pending-notes-" + today() + ".json";
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 60000);
+                } catch (e) {
+                  setBackupError(e.message);
+                }
+              }}
+            >
+              {t(
+                "نسخة للمسودات والرسائل المنتظرة",
+                "Back up drafts and pending notes",
+              )}
+            </button>
+            <button className="button" onClick={() => restore.current.click()}>
+              {t("استعادة مسودات المتابعات", "Restore review drafts")}
+            </button>
+            <input
+              hidden
+              ref={restore}
+              type="file"
+              accept=".json,application/json"
+              aria-label={t("نسخة مسودات المتابعة", "Review drafts backup")}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                try {
+                  if (file.size > 15000000) throw Error("الملف كبير");
+                  await restorePendingReviews(
+                    ctx.connection,
+                    JSON.parse(await file.text()),
+                  );
+                  setBackupError("");
+                } catch (e) {
+                  setBackupError(e.message);
+                }
+              }}
+            />
+            {backupError && <p role="alert">{backupError}</p>}
+          </div>
+        </details>
       )}
       <div className="history-actions">
         <button className="button" onClick={ctx.refresh} disabled={ctx.busy}>
@@ -621,8 +620,8 @@ export function ReviewPanel({
       )}
       <p className="hint">
         {t(
-          "الإقرار بالاطلاع لا يعني تنفيذ الإجراء. تبقى التقارير الأصلية محفوظة باسم أصحابها.",
-          "Acknowledgement does not mean the action is completed. Original reports retain their authorship.",
+          "الإقرار بالاطلاع لا يعني تنفيذ الإجراء.",
+          "Acknowledgement does not mean the action is completed.",
         )}
       </p>
     </section>

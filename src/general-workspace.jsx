@@ -1,3 +1,4 @@
+import { shortCaseReference } from "./case-reference.js";
 import React, { useEffect, useRef, useState } from "react";
 import { useReads } from "./read-context.jsx";
 import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
@@ -195,7 +196,7 @@ function ReportRow({ record, lang, t, onReport, onStudent }) {
             {record.lateReport.studentCount}
           </span>
         )}
-        {record.reference && <bdi>{record.reference}</bdi>}
+        {record.reference && <bdi>{shortCaseReference(record.reference)}</bdi>}
         {record.kind === "cases" && (
           <span>
             {record.rowCount}{" "}
@@ -678,8 +679,8 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
         >
           {[
             ["overview", "نظرة عامة", "Overview"],
-            ["students", "الطلبة", "Students"],
-            ["reports", "التقارير الواردة", "Received reports"],
+            ["students", "ملفات الطلبة", "Student files"],
+            ["reports", "التقارير", "Reports"],
           ].map(([value, ar, en]) => (
             <button
               className="button"
@@ -693,18 +694,27 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
         </nav>
         <section className="general-filter-panel panel">
           {tab !== "students" && (
-            <div className="general-periods" aria-label={t("الفترة", "Period")}>
-              {periods.map(([value, ar, en]) => (
-                <button
-                  className="button"
-                  key={value}
-                  aria-pressed={scope.period === value}
-                  onClick={() => changeScope({ ...scope, period: value })}
-                >
-                  {t(ar, en)}
-                </button>
-              ))}
-            </div>
+            <label className="field">
+              <span>{t("الفترة", "Period")}</span>
+              <select
+                aria-label={t("الفترة", "Period")}
+                value={scope.period}
+                onChange={(e) =>
+                  changeScope({ ...scope, period: e.target.value })
+                }
+              >
+                {periods.map(([value, ar, en]) => (
+                  <option key={value} value={value}>
+                    {t(ar, en)}
+                  </option>
+                ))}
+                {scope.period === "custom" && (
+                  <option value="custom">
+                    {t("فترة محددة", "Custom dates")}
+                  </option>
+                )}
+              </select>
+            </label>
           )}
           <label className="field">
             <span>{t("الصف", "Grade")}</span>
@@ -893,13 +903,6 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                     "Follow-ups due",
                     `${t("حتى", "Through")} ${labelDate(snapshot.scope.dueCutoff, lang)}`,
                   ],
-                  [
-                    "reports",
-                    snapshot.totals.reports,
-                    "التقارير الواردة",
-                    "Received reports",
-                    "",
-                  ],
                 ].map(([value, count, ar, en, hint]) => (
                   <button
                     className="general-stat"
@@ -914,9 +917,6 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                     <span>{t(ar, en)}</span>
                     <strong>{count === null ? "—" : count}</strong>
                     {hint && <small>{hint}</small>}
-                    <span className="general-card-action">
-                      {t("عرض التفاصيل ←", "View details →")}
-                    </span>
                   </button>
                 ))}
               </div>
@@ -940,37 +940,40 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                   {snapshot.totals.unresolved} · {t("عرض", "View")}
                 </button>
               )}
-              <h2>{t("الصفوف", "Grades")}</h2>
-              <div className="general-grades">
-                {snapshot.grades.map((grade) => (
-                  <button
-                    className="general-grade"
-                    key={grade.grade}
-                    onClick={() =>
-                      changeScope({ ...scope, grade: grade.grade })
-                    }
-                  >
-                    <strong>{t(grade.name, "Grade " + grade.grade)}</strong>
-                    <span>
-                      {grade.caseReports} {t("تقارير حالات", "case reports")} ·{" "}
-                      {grade.lateStudents} {t("طلبة متأخرون", "late students")}
-                    </span>
-                    <span>
-                      {t("الغياب", "Absence")}: {grade.absenceDays ?? "—"} ·{" "}
-                      {grade.absenceReceived}/{grade.absenceExpected}{" "}
-                      {t("كشوف", "sheets")}
-                    </span>
-                    {!grade.rosterAvailable && (
+              <details className="general-secondary">
+                <summary>{t("حسب الصف", "By grade")}</summary>
+                <div className="general-grades">
+                  {snapshot.grades.map((grade) => (
+                    <button
+                      className="general-grade"
+                      key={grade.grade}
+                      onClick={() =>
+                        changeScope({ ...scope, grade: grade.grade })
+                      }
+                    >
+                      <strong>{t(grade.name, "Grade " + grade.grade)}</strong>
                       <span>
-                        {t(
-                          "قائمة الطلبة غير متاحة",
-                          "Student roster unavailable",
-                        )}
+                        {grade.caseReports} {t("تقارير حالات", "case reports")}{" "}
+                        · {grade.lateStudents}{" "}
+                        {t("طلبة متأخرون", "late students")}
                       </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+                      <span>
+                        {t("الغياب", "Absence")}: {grade.absenceDays ?? "—"} ·{" "}
+                        {grade.absenceReceived}/{grade.absenceExpected}{" "}
+                        {t("كشوف", "sheets")}
+                      </span>
+                      {!grade.rosterAvailable && (
+                        <span>
+                          {t(
+                            "قائمة الطلبة غير متاحة",
+                            "Student roster unavailable",
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </details>
               {!!snapshot.duePreview?.length && (
                 <section>
                   <h2>{t("المتابعات المستحقة", "Follow-ups due")}</h2>
@@ -991,8 +994,8 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                 </section>
               )}
               {!!snapshot.recent?.length && (
-                <section>
-                  <h2>{t("أحدث التقارير", "Recent reports")}</h2>
+                <details className="general-secondary">
+                  <summary>{t("أحدث التقارير", "Recent reports")}</summary>
                   <div className="panel">
                     {snapshot.recent.slice(0, 3).map((entry) => (
                       <ReportRow
@@ -1005,7 +1008,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
                       />
                     ))}
                   </div>
-                </section>
+                </details>
               )}
             </div>
             {view && (

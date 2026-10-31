@@ -1,3 +1,4 @@
+import { shortCaseReference } from "./case-reference.js";
 import { letterhead, dateLabel, arDigits } from "./model.js";
 
 const unavailable = () =>
@@ -47,7 +48,10 @@ export function profileReport(history) {
   const lateDates = [...new Set(history.totals.lateDates)].sort().reverse();
   const caseRows = cases.flatMap((record) =>
     record.caseSummaries.map((summary) => [
-      [dateLabel(summary.date || record.date), record.reference]
+      [
+        dateLabel(summary.date || record.date),
+        shortCaseReference(record.reference),
+      ]
         .filter(Boolean)
         .join("\n"),
       summary.type || "—",
@@ -139,7 +143,7 @@ export function profileReport(history) {
                   .filter((e) => e.operation.type !== "open")
                   .map((e) => [
                     [
-                      thread.source?.reference ||
+                      shortCaseReference(thread.source?.reference) ||
                         dateLabel(thread.source?.date),
                       "نسخة المراجعة: " + thread.reportRevision,
                       thread.archivedAt

@@ -92,7 +92,6 @@ export function ExportPanels({
     <>
       {controls("top")}
       {children}
-      {controls("bottom")}
     </>
   );
 }

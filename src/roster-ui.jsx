@@ -83,7 +83,7 @@ export function StudentPicker({ form, roster, grade, lang, onChange }) {
               <small>{s.className}</small>
             </button>
           ))}
-          {!!form.student.trim() && (
+          {!!form.student.trim() && !students.length && (
             <button
               type="button"
               className="manual-choice"

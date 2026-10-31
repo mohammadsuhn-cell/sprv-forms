@@ -1,3 +1,4 @@
+import { shortCaseReference } from "./case-reference.js";
 import React, { useEffect, useRef, useState } from "react";
 import { useReads } from "./read-context.jsx";
 import { dateLabel } from "./model.js";
@@ -478,7 +479,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
           {record.reference && (
             <>
               {" "}
-              · <bdi>{record.reference}</bdi>
+              · <bdi>{shortCaseReference(record.reference)}</bdi>
             </>
           )}
         </small>

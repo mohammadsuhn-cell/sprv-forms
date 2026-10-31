@@ -111,7 +111,7 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
     r = profileReport(data);
   assert.equal(r.tables[0].rows.length, 35);
   assert.equal(r.tables[1].rows.length, 2);
-  assert(r.tables[0].rows[34][0].includes("CASE-2026-000034"));
+  assert(r.tables[0].rows[34][0].includes("2026/34"));
   assert.deepEqual(r.sections, []);
   assert.equal(r.tables[0].rows[0][1], "متابعة");
   const book = new ExcelJS.Workbook();
@@ -119,12 +119,7 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
   const allCells = JSON.stringify(
     book.worksheets.map((s) => s.getSheetValues()),
   );
-  for (const value of [
-    "طالب تجريبي",
-    "CASE-2026-000034",
-    "لم يُنفّذ بعد",
-    "٢٧/٠٩/٢٠٢٦",
-  ])
+  for (const value of ["طالب تجريبي", "2026/34", "لم يُنفّذ بعد", "٢٧/٠٩/٢٠٢٦"])
     assert(allCells.includes(value), value);
   assert(book.worksheets.every((s) => s.views[0].rightToLeft));
   for (const value of [
@@ -146,7 +141,7 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
     });
     for (const value of [
       "طالب تجريبي",
-      "CASE-2026-000034",
+      "2026/34",
       "لم يُنفّذ بعد",
       "٢٧/٠٩/٢٠٢٦",
       "w:bidi",
@@ -224,7 +219,7 @@ test("student-file Word and Excel retain absence and the review conversation wit
     for (const value of [
       "مشرف الغياب",
       "٢٩/٠٩/٢٠٢٦",
-      "CASE-2026-000034",
+      "2026/34",
       "نسخة المراجعة: 2",
       "طلب مغلق",
       "يرجى مقابلة ولي الأمر",

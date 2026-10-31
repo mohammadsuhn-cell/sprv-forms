@@ -349,3 +349,33 @@
     width: 140px;
   }
 }
+
+.general-workspace .general-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 720px) {
+  .general-workspace .general-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.general-workspace .general-filter-panel {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+}
+.general-workspace .general-filter-panel > .field {
+  flex: 1;
+  min-width: 130px;
+  max-width: 280px;
+  margin: 0;
+}
+.general-workspace .general-filter-panel > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.general-workspace .general-advanced[open] {
+  flex-basis: 100%;
+}

@@ -58,6 +58,7 @@ import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
 import {
   caseReference,
   caseReferenceLabel,
+  shortCaseReference,
   submissionForm,
   withReceivedReferences,
 } from "./case-reference.js";
@@ -877,7 +878,9 @@ function App() {
   );
   const visibleSaved = data.saved.filter(
     (s) =>
-      JSON.stringify(s).toLowerCase().includes(query.toLowerCase()) &&
+      (JSON.stringify(s) + " " + shortCaseReference(caseReference(s)))
+        .toLowerCase()
+        .includes(query.toLowerCase()) &&
       (!dueOnly ||
         (s.due &&
           s.due <= today() &&
@@ -943,21 +946,23 @@ function App() {
       <main
         className={`${page === "form" ? "content editing" : "content"}${isGeneral && page === "home" ? " general-content" : ""}${readyFile ? " has-ready-file" : ""}`}
       >
-        <ReviewBadge t={t} onOpen={() => setPage("reviews")} />
+        <div className="workspace-actions">
+          <ReviewBadge t={t} onOpen={() => setPage("reviews")} />
+          {isGeneral && !readOnlyConnection && (
+            <nav
+              className="record-tools"
+              aria-label={t("أعمال المشرف العام", "General supervisor actions")}
+            >
+              <button className="button" onClick={() => setPage("create")}>
+                {t("إنشاء تقرير", "Create report")}
+              </button>
+              <button className="button" onClick={() => setPage("saved")}>
+                {t("تقاريري", "My reports")}
+              </button>
+            </nav>
+          )}
+        </div>
         {page === "reviews" && <ReviewPanel t={t} />}
-        {isGeneral && !readOnlyConnection && (
-          <nav
-            className="record-tools"
-            aria-label={t("أعمال المشرف العام", "General supervisor actions")}
-          >
-            <button className="button" onClick={() => setPage("create")}>
-              {t("إنشاء تقرير", "Create report")}
-            </button>
-            <button className="button" onClick={() => setPage("saved")}>
-              {t("تقاريري", "My reports")}
-            </button>
-          </nav>
-        )}
         {connected && page === "settings" && (
           <button
             className="delivery-status"
@@ -1039,8 +1044,11 @@ function App() {
               )}
             </SchoolSnapshotWorkspace>
           )}
-        {isGeneral &&
-          ["home", "settings", "student-history"].includes(page) && (
+        {isGeneral && (
+          <div
+            className="general-shell"
+            hidden={!["home", "settings"].includes(page)}
+          >
             <GeneralWorkspace
               key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
               connection={connected}
@@ -1050,7 +1058,8 @@ function App() {
               showSettings={page === "settings"}
               onSettings={() => setPage("settings")}
             />
-          )}
+          </div>
+        )}
         {page === "home" && !delivery.ready && (
           <p role="status">{t("جارٍ تحميل الاتصال…", "Loading connection…")}</p>
         )}
@@ -1073,22 +1082,19 @@ function App() {
                     value={authoringGrade}
                     onChange={setAuthoringGrade}
                   />
-                  {data.roster && (
+                  {
                     <button
                       className="text-control"
                       disabled={!!busy}
                       onClick={refreshAuthoringRoster}
                     >
-                      {t("تحديث قائمة الطلبة", "Refresh student list")} ·{" "}
-                      {arDigits(data.roster.students.length)}
+                      {busy === "roster"
+                        ? t("جارٍ تحميل الطلبة…", "Loading students…")
+                        : data.roster
+                          ? t("تحديث قائمة الطلبة", "Refresh student list")
+                          : t("تحميل الطلبة", "Load students")}
                     </button>
-                  )}
-                  <p className="hint">
-                    {t(
-                      "تُستأنف المسودة بصفها؛ والتقرير المحفوظ يبدأ نموذجًا جديدًا.",
-                      "Drafts resume in their grade; saved reports start a new form.",
-                    )}
-                  </p>
+                  }
                 </section>
               )}
               <div className="page-heading">
@@ -1109,7 +1115,7 @@ function App() {
                   <span>{schoolIdentity.year}</span>
                 </div>
               )}
-              {data.roster && (
+              {data.roster && !isGeneral && (
                 <div className="roster-home">
                   <span>
                     {data.profile.grade || rosterGrades(data.roster).join("، ")}
@@ -1131,7 +1137,7 @@ function App() {
                   onClick={() => openStudentHistory()}
                 >
                   <div>
-                    <h2>{t("سجل الطالب", "Student history")}</h2>
+                    <h2>{t("ملفات الطلبة", "Student files")}</h2>
                   </div>
                 </button>
                 {[
@@ -1187,8 +1193,8 @@ function App() {
                   lang={data.lang}
                   field={{
                     key: "newGrade",
-                    ar: "صف النموذج الجديد عند الضغط على جديد",
-                    en: "Grade for the next new form",
+                    ar: "صف التقرير التالي",
+                    en: "Next report grade",
                     kind: "select",
                     options: grades,
                   }}
@@ -1207,13 +1213,13 @@ function App() {
                 <span className="small-status">
                   {storageError
                     ? t("غير محفوظ", "Not saved")
-                    : t("مسودة على الجهاز", "Draft on this device")}
+                    : t("مسودة", "Draft")}
                 </span>
                 {kind === "case" && caseReferenceLabel(form) && (
                   <p className="case-reference">
                     {t("رقم الحالة: ", "Case reference: ")}
                     <bdi>
-                      {caseReference(form) ||
+                      {shortCaseReference(caseReference(form)) ||
                         t("بانتظار رقم الحالة", "Reference pending")}
                     </bdi>
                   </p>
@@ -1223,14 +1229,6 @@ function App() {
                 {t("جديد", "New")}
               </button>
             </div>
-            <ExportOptions
-              title={t("تصدير النموذج", "Export form")}
-              formats={kind === "absence" ? ["pdf"] : ["pdf", "docx", "xlsx"]}
-              busy={!!busy}
-              onPrepare={(extension) =>
-                exportFile(extension === "docx" ? "word" : extension)
-              }
-            />
             <OptionalPanel
               key={form.id}
               initialOpen={!form.supervisor}
@@ -1530,15 +1528,6 @@ function App() {
                 {t("متابعات مستحقة", "Follow-ups due")}
               </label>
             </div>
-
-            <ExportOptions
-              title={t("تصدير سجل الحالات", "Export case register")}
-              formats={["xlsx"]}
-              busy={!!busy || !visibleSaved.some((s) => s.kind === "case")}
-              onPrepare={() =>
-                exportFile("xlsx", caseRegister(visibleSaved, data.profile))
-              }
-            />
 
             <section className="panel saved-list">
               {visibleSaved.map((s) => (
@@ -1903,7 +1892,7 @@ function App() {
               <span className="case-reference">
                 {t("رقم الحالة: ", "Case reference: ")}
                 <bdi>
-                  {caseReference(item) ||
+                  {shortCaseReference(caseReference(item)) ||
                     t("بانتظار رقم الحالة", "Reference pending")}
                 </bdi>
               </span>

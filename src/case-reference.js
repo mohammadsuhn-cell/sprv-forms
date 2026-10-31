@@ -1,3 +1,12 @@
+// Compact presentation; signed records and receipt identities retain their original reference.
+export function shortCaseReference(value) {
+  if (typeof value !== "string") return "";
+  const incoming = /^CASE-(\d{4})-(\d{6,12})$/.exec(value);
+  if (incoming) return `${incoming[1]}/${Number(incoming[2])}`;
+  const local = /^S-(\d+)$/.exec(value);
+  return local ? `S${Number(local[1])}` : value;
+}
+
 export const validCaseReference = (value) =>
   typeof value === "string" && /^CASE-\d{4}-\d{6,12}$/.test(value);
 
@@ -5,7 +14,8 @@ export const caseReference = (form) =>
   form.kind === "case" ? form.receiverReference || form.reference || "" : "";
 
 export const caseReferenceLabel = (form) =>
-  caseReference(form) || (form.syncSupervisorId ? "بانتظار رقم الحالة" : "");
+  shortCaseReference(caseReference(form)) ||
+  (form.syncSupervisorId ? "بانتظار رقم الحالة" : "");
 
 // Receipt metadata is portable, but never changes the signed submission or
 // creates a new revision just because the receiver acknowledged a case.

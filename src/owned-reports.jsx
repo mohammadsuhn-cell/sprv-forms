@@ -1,3 +1,4 @@
+import { shortCaseReference } from "./case-reference.js";
 import React, { useState } from "react";
 import { signedRead } from "./delivery.js";
 import { titles } from "./model.js";
@@ -29,13 +30,8 @@ export function OwnedReports({ t, lang }) {
     }
   }
   return (
-    <section className="panel owned-reports">
-      <h2>
-        {t(
-          "نسخي المستلمة لدى الإشراف العام",
-          "My reports received by general supervision",
-        )}
-      </h2>
+    <details className="panel owned-reports">
+      <summary>{t("النسخ المستلمة", "Received copies")}</summary>
       <button className="button" disabled={busy} onClick={() => load()}>
         {t("عرض التقارير المستلمة", "Show received reports")}
       </button>
@@ -65,8 +61,9 @@ export function OwnedReports({ t, lang }) {
             }
           }}
         >
-          {titles[r.kind]?.[lang === "en" ? 1 : 0]} · {r.reference || r.date} ·{" "}
-          {r.grade} {r.withdrawnAt && t("· مسحوب", "· Withdrawn")}
+          {titles[r.kind]?.[lang === "en" ? 1 : 0]} ·{" "}
+          {shortCaseReference(r.reference) || r.date} · {r.grade}{" "}
+          {r.withdrawnAt && t("· مسحوب", "· Withdrawn")}
         </button>
       ))}
       {data?.nextCursor && (
@@ -88,6 +85,6 @@ export function OwnedReports({ t, lang }) {
           <ReviewPanel recordId={detail.id} revision={detail.revision} t={t} />
         </>
       )}
-    </section>
+    </details>
   );
 }

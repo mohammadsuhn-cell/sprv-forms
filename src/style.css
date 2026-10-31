@@ -1244,3 +1244,79 @@ h2 {
   opacity: 0.7;
   cursor: default;
 }
+
+.general-shell[hidden] {
+  display: none !important;
+}
+.general-secondary,
+.review-backups {
+  margin-block: 16px;
+}
+.general-secondary > summary,
+.review-backups > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+.general-secondary > summary::before,
+.review-backups > summary::before {
+  content: "+";
+  margin-inline-end: 10px;
+}
+.general-secondary[open] > summary::before,
+.review-backups[open] > summary::before {
+  content: "−";
+}
+
+.workspace-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.workspace-actions:empty {
+  display: none;
+}
+.workspace-actions > .record-tools {
+  display: contents;
+}
+.workspace-actions .button {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 14px;
+  min-height: 44px;
+}
+.snapshot-status-bar {
+  padding: 10px 14px;
+}
+.snapshot-status-bar > div {
+  gap: 2px;
+}
+.snapshot-status-bar strong,
+.snapshot-status-bar span {
+  font-size: 13px;
+}
+.snapshot-status-bar .primary {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+@media (max-width: 560px) {
+  .form-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .form-cards .form-card {
+    padding: 16px;
+    min-height: 90px;
+  }
+  .form-cards .form-card h2 {
+    font-size: 16px;
+  }
+  .form-cards .form-card:first-child,
+  .form-cards .form-card:last-child {
+    grid-column: 1 / -1;
+    min-height: 64px;
+  }
+}

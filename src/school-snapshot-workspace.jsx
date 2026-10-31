@@ -246,10 +246,7 @@ export function SchoolSnapshotWorkspace({
                 <span>
                   {bundle
                     ? formatTime(bundle.payload.capturedAt, lang)
-                    : t(
-                        "حدّث للاحتفاظ بنسخة دون اتصال",
-                        "Update to keep an offline copy",
-                      )}
+                    : t("عرض مباشر", "Live view")}
                   {offline ? ` · ${t("دون اتصال", "Offline")}` : ""}
                 </span>
               </div>
@@ -257,11 +254,11 @@ export function SchoolSnapshotWorkspace({
                 className="primary"
                 disabled={!ready || busy}
                 onClick={update}
+                aria-label={updateLabel}
               >
-                {updateLabel}
-              </button>
-              <button className="text-control" onClick={onSettings}>
-                {t("النسخ الاحتياطية", "Backups")}
+                {bundle
+                  ? t("تحديث النسخة", "Update copy")
+                  : t("حفظ دون اتصال", "Save offline")}
               </button>
             </div>
           ) : (

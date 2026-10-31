@@ -12,6 +12,7 @@ import {
   submissionForm,
   withReceivedReferences,
   caseReferenceLabel,
+  shortCaseReference,
 } from "../src/case-reference.js";
 import { wordBlob, excelBlob } from "../src/exports.js";
 import fs from "node:fs";
@@ -46,7 +47,9 @@ test("receipt metadata survives backup and edits without changing the submitted 
   assert.equal(store.saved[0].receiverReference, undefined);
   const restored = validateStore(JSON.parse(JSON.stringify(next))).saved[0];
   assert.equal(restored.receiverReference, reference);
-  assert(JSON.stringify(report(restored)).includes(reference));
+  assert(
+    JSON.stringify(report(restored)).includes(shortCaseReference(reference)),
+  );
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "sprv-reference-"));
   const file = path.join(folder, "case.docx");
   try {
@@ -57,7 +60,7 @@ test("receipt metadata survives backup and edits without changing the submitted 
     assert(
       execFileSync("unzip", ["-p", file, "word/document.xml"], {
         encoding: "utf8",
-      }).includes(reference),
+      }).includes(shortCaseReference(reference)),
     );
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
@@ -68,10 +71,21 @@ test("receipt metadata survives backup and edits without changing the submitted 
   ]) {
     const book = new ExcelJS.Workbook();
     await book.xlsx.load(await (await excelBlob(exportForm)).arrayBuffer());
-    assert(String(book.worksheets[0].getCell("A7").value).includes(reference));
+    assert(
+      String(book.worksheets[0].getCell("A7").value).includes(
+        shortCaseReference(reference),
+      ),
+    );
   }
   assert.equal(newForm("case", store.profile).receiverReference, undefined);
   const bad = structuredClone(next);
   bad.saved[0].receiverReference = "fake";
   assert.throws(() => validateStore(bad));
+});
+
+test("short numbers preserve year and sequence without changing legacy values", () => {
+  assert.equal(shortCaseReference("CASE-2026-000123"), "2026/123");
+  assert.equal(shortCaseReference("CASE-2027-000123"), "2027/123");
+  assert.equal(shortCaseReference("S-00012"), "S12");
+  assert.equal(shortCaseReference("legacy-42"), "legacy-42");
 });
