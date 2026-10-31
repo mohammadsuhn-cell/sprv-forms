@@ -2,11 +2,46 @@
 import { caseParticipants, participantAction } from '../case-students.js';
 import { actionText, caseDescription } from '../case-options.js';
 import { matchRosterStudent, receivedStudentContext } from './student-directory.js';
+import { report, letterhead, dateLabel } from '../model.js';
 
 export const referencedForm = (row) => {
   const { receiverReference, ...form } = row.form;
   return row.reference ? { ...form, receiverReference: row.reference } : form;
 };
+export function studentReportView(row, studentId, students) {
+  const form = referencedForm(row);
+  if (['late', 'absence'].includes(form.kind)) {
+    form.students = form.students.filter(
+      (entry) =>
+        matchRosterStudent(
+          { ...entry, className: entry.className || form.className },
+          students,
+          row.grade,
+        ).student?.id === studentId,
+    );
+    form.notes = '';
+  }
+  if (form.kind === 'absence')
+    return {
+      report: {
+        ...letterhead,
+        school: form.school,
+        year: form.year,
+        title: 'سجل غياب الطالب',
+        supervisor: form.supervisor,
+        meta: [['التاريخ', dateLabel(form.date)]],
+        sections: [],
+        tables: [
+          {
+            title: 'الغياب المبلغ عنه',
+            columns: ['الطالب', 'الشعبة'],
+            rows: form.students.map((s) => [s.student, s.className]),
+          },
+        ],
+      },
+    };
+  return { report: report(form), ...(['case', 'cases'].includes(form.kind) ? { form } : {}) };
+}
 export function studentCaseSummaries(form, studentId, students, grade) {
   if (form.kind === 'case') {
     const participants = caseParticipants(form).filter(

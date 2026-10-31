@@ -8,6 +8,8 @@ import {
   historyFileName,
 } from "./history-export.js";
 import "./student-history.css";
+import { ReviewPanel, useReviews } from "./review-ui.jsx";
+import { loadStudentReviews } from "./review-delivery.js";
 
 export function readError(error, t) {
   if (error.code === "pagination_expired")
@@ -295,6 +297,7 @@ export function ReportContent({ report, students = [], onStudent }) {
 }
 
 function HistoryExports({ studentId, record, lang, t, children }) {
+  const reviews = useReviews();
   const { student: readStudentData } = useReads();
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState(null);
@@ -345,6 +348,13 @@ function HistoryExports({ studentId, record, lang, t, children }) {
           readStudentData,
           active,
         );
+        if (reviews?.supported)
+          history.reviews = await loadStudentReviews(
+            reviews.connection,
+            studentId,
+            active,
+          );
+        if (!active()) return;
         const report = profileReport(history);
         blob = await (
           extension === "pdf"
@@ -453,11 +463,13 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
       <summary>
         <span>
           <strong>
-            {record.kind === "late"
-              ? t("تأخر", "Lateness")
-              : record.kind === "cases"
-                ? t("سجل حالات", "Case register")
-                : record.type || t("حالة", "Case")}
+            {record.kind === "absence"
+              ? t("غياب", "Absence")
+              : record.kind === "late"
+                ? t("تأخر", "Lateness")
+                : record.kind === "cases"
+                  ? t("سجل حالات", "Case register")
+                  : record.type || t("حالة", "Case")}
           </strong>{" "}
           · {formatDate(record.date)}
         </span>
@@ -489,6 +501,14 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
         <HistoryExports studentId={studentId} record={record} lang={lang} t={t}>
           <ReportContent report={detail.report} />
         </HistoryExports>
+      )}
+      {detail && (
+        <ReviewPanel
+          recordId={record.id}
+          revision={detail.revision}
+          t={t}
+          canCreate
+        />
       )}
     </details>
   );
@@ -532,6 +552,16 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                   <strong>{data.totals.lateDays}</strong>
                   <span>{t("أيام التأخر", "Late days")}</span>
                 </div>
+                <div>
+                  <strong>
+                    {data.absenceCoverage === false
+                      ? "—"
+                      : (data.totals.absenceDays ?? "—")}
+                  </strong>
+                  <span>
+                    {t("أيام الغياب المبلغ عنها", "Reported absence days")}
+                  </span>
+                </div>
               </div>
               {data.totals.lateDays > 0 && (
                 <details className="history-dates">
@@ -545,6 +575,14 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                     ))}
                   </ul>
                 </details>
+              )}
+              {data.absenceCoverage === false && (
+                <p className="hint">
+                  {t(
+                    "حدّث بيانات الصف لإضافة الغياب إلى ملف الطالب.",
+                    "Update grade history to include absence in the student file.",
+                  )}
+                </p>
               )}
               <p className="hint">
                 {t("آخر تحديث", "Last refreshed")}:{" "}
@@ -562,6 +600,7 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                 ["", "الكل", "All"],
                 ["case", "الحالات", "Cases"],
                 ["late", "التأخر", "Lateness"],
+                ["absence", "الغياب", "Absence"],
               ].map(([value, ar, en]) => (
                 <button
                   className="button"
@@ -606,6 +645,7 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
               </div>
             )}
           </HistoryExports>
+          <ReviewPanel studentId={data.student.id} t={t} />
         </>
       )}
     </section>

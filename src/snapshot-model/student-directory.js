@@ -8,6 +8,7 @@ export const directoryGrades = [
   ['8', 'الصف الثامن', 'Grade 8'],
   ['9', 'الصف التاسع', 'Grade 9'],
 ];
+export const studentReportKinds = ['case', 'cases', 'late', 'absence'];
 export const classKey = (value) => normalize(value).replace(/\s+/g, '').replace(/[\\-]/g, '/');
 export function gradeNumber(value) {
   const key = normalize(value);
@@ -117,10 +118,16 @@ export function receivedForStudent(studentId, records, students) {
 export function receivedHistoryTotals(records) {
   const late = records.filter((row) => row.kind === 'late');
   const lateDates = [...new Set(late.map((row) => row.date))].sort().reverse();
+  const absenceDates = [...new Set(records.filter((r) => r.kind === 'absence').map((r) => r.date))]
+    .sort()
+    .reverse();
   return {
     caseReports: records.filter((row) => ['case', 'cases'].includes(row.kind)).length,
     lateReports: late.length,
     lateDays: lateDates.length,
     lateDates,
+    absenceReports: records.filter((r) => r.kind === 'absence').length,
+    absenceDays: absenceDates.length,
+    absenceDates,
   };
 }

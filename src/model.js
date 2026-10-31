@@ -354,6 +354,7 @@ export function newForm(kind, profile = {}, roster = null) {
     school: schoolIdentity.school,
     year: schoolIdentity.year,
     supervisor: profile.supervisor || "",
+    ...(grades.includes(profile.grade) ? { grade: profile.grade } : {}),
     ...(profile.syncSupervisorId
       ? { syncSupervisorId: profile.syncSupervisorId }
       : {}),

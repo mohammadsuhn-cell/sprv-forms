@@ -8,6 +8,7 @@ import {
   reconcileSaved,
   retryDelivery,
   queueWithdrawal,
+  refreshCapabilities,
 } from "./delivery.js";
 import { titles, dateLabel } from "./model.js";
 
@@ -149,6 +150,7 @@ export function useDelivery(saved, enabled) {
   };
   const tick = async () => {
     try {
+      await refreshCapabilities();
       if (enabledRef.current) {
         await reconcileSaved();
         await refresh();
@@ -228,10 +230,11 @@ export function DeliveryPanel({
           <p>
             <strong>{delivery.connection.supervisor.name}</strong> ·{" "}
             {delivery.connection.supervisor.role === "general"
-              ? t("مشرف عام · قراءة فقط", "General supervisor · read only")
+              ? t("مشرف عام", "General supervisor")
               : delivery.connection.supervisor.grade}
           </p>
-          {delivery.connection.supervisor.role !== "general" && (
+          {(delivery.connection.supervisor.role !== "general" ||
+            delivery.connection.capabilities?.create) && (
             <>
               <p role="status">
                 {delivery.blocked
@@ -319,7 +322,7 @@ export function DeliveryPanel({
               <p>
                 <strong>{preview.info.supervisor.name}</strong> ·{" "}
                 {preview.info.supervisor.role === "general"
-                  ? t("مشرف عام · قراءة فقط", "General supervisor · read only")
+                  ? t("مشرف عام", "General supervisor")
                   : preview.info.supervisor.grade}
               </p>
               <button

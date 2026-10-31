@@ -17,8 +17,9 @@ import {
   receivedHistoryTotals,
   matchRosterStudent,
   validStudentId,
+  studentReportKinds,
 } from './student-directory.js';
-import { referencedForm, studentCaseSummaries } from './received-details.js';
+import { referencedForm, studentCaseSummaries, studentReportView } from './received-details.js';
 import { normalize } from './normalize.js';
 
 export const snapshotFormat = 'sprv-general-snapshot';
@@ -55,10 +56,19 @@ export function snapshotHeader(value) {
     school: value.school,
     year: value.year,
     capturedAt: value.capturedAt,
+    ...(value.studentFileVersion === 2 ? { studentFileVersion: 2 } : {}),
     ...(value.scope !== undefined ? { scope: value.scope } : {}),
   };
 }
-export function makeSchoolSnapshot(config, supervisor, students, records, snapshotId, capturedAt) {
+export function makeSchoolSnapshot(
+  config,
+  supervisor,
+  students,
+  records,
+  snapshotId,
+  capturedAt,
+  studentFileVersion = 1,
+) {
   const scope = snapshotScope({ supervisor });
   return {
     ...snapshotHeader({
@@ -67,6 +77,7 @@ export function makeSchoolSnapshot(config, supervisor, students, records, snapsh
       preparedBy: supervisor.name,
       snapshotId,
       capturedAt,
+      studentFileVersion,
       ...(scope.role === 'supervisor' ? { scope } : {}),
     }),
     students: students
@@ -84,7 +95,10 @@ export function makeSchoolSnapshot(config, supervisor, students, records, snapsh
         (r) =>
           !r.withdrawnAt &&
           receivedKinds.includes(r.form.kind) &&
-          (scope.role === 'general' || ['case', 'cases', 'late'].includes(r.form.kind)) &&
+          (scope.role === 'general' ||
+            (studentFileVersion >= 2 ? studentReportKinds : ['case', 'cases', 'late']).includes(
+              r.form.kind,
+            )) &&
           gradeNumber(r.grade) &&
           (!scope.grade || gradeNumber(r.grade) === scope.grade),
       )
@@ -116,6 +130,7 @@ export function validateSchoolSnapshot(value, connection) {
   const owner = snapshotOwner(connection);
   const scope = snapshotScope(connection);
   requireValue(value && value.format === snapshotFormat && value.version === 1);
+  requireValue(value.studentFileVersion === undefined || value.studentFileVersion === 2);
   if (`${value.serverId}:${value.supervisorId}` !== owner) throw error('snapshot_owner');
   const declared = value.scope;
   // Existing general-supervisor backups have no explicit scope and remain valid.
@@ -207,8 +222,7 @@ export function validateSchoolSnapshot(value, connection) {
     );
     requireValue(validDate(row.form.date));
     if (scope.grade && gradeNumber(row.grade) !== scope.grade) throw error('snapshot_scope');
-    if (scope.grade && !['case', 'cases', 'late'].includes(row.form.kind))
-      throw error('snapshot_scope');
+    if (scope.grade && !studentReportKinds.includes(row.form.kind)) throw error('snapshot_scope');
     bounded(row.form);
     try {
       validateStore({ ...emptyStore(), saved: [structuredClone(row.form)] });
@@ -402,7 +416,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
     const selected = studentFor(params);
     if (action === 'student-history') {
       const matches = records.filter(
-        (r) => ['case', 'cases', 'late'].includes(r.form.kind) && studentMatches(r, selected),
+        (r) => studentReportKinds.includes(r.form.kind) && studentMatches(r, selected),
       );
       const filtered = matches
         .filter(
@@ -410,7 +424,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
             !params.kind ||
             (params.kind === 'case'
               ? ['case', 'cases'].includes(r.form.kind)
-              : r.form.kind === 'late'),
+              : r.form.kind === params.kind),
         )
         .toSorted(
           (a, b) =>
@@ -424,6 +438,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
         {
           student: { id: selected.id, name: selected.name, className: selected.className },
           summaryVersion: 1,
+          absenceCoverage: !scopeGrade || snapshot.studentFileVersion === 2,
           preparedBy: snapshot.preparedBy,
           school: snapshot.school,
           year: snapshot.year,
@@ -451,7 +466,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
     }
     if (action === 'student-report') {
       const row = recordFor(params);
-      if (!['case', 'cases', 'late'].includes(row.form.kind) || !studentMatches(row, selected))
+      if (!studentReportKinds.includes(row.form.kind) || !studentMatches(row, selected))
         return fail('record_not_found', 404);
       const form = referencedForm(row);
       if (form.kind === 'late') {
@@ -465,7 +480,7 @@ export function createSnapshotReader(snapshot, clock = () => new Date()) {
         );
         form.notes = '';
       }
-      return { ...detail(row, form), ...(['case', 'cases'].includes(form.kind) ? { form } : {}) };
+      return { ...detail(row, form), ...studentReportView(row, selected.id, students) };
     }
     return fail('invalid');
   }

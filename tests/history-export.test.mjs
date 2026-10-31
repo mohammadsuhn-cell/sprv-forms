@@ -172,3 +172,68 @@ test("profile exports preserve Arabic, full case lists, distinct late dates and 
   await emptyBook.xlsx.load(await (await excelReportBlob(empty)).arrayBuffer());
   assert.equal(emptyBook.worksheets.length, 2);
 });
+
+test("student-file Word and Excel retain absence and the review conversation with source and revision", async () => {
+  const data = fixture();
+  data.absenceCoverage = true;
+  data.totals.absenceDays = 1;
+  data.records.push({
+    id: "absence",
+    kind: "absence",
+    date: "2026-09-29",
+    supervisorName: "مشرف الغياب",
+  });
+  data.reviews = {
+    fetchedAt: data.fetchedAt,
+    threads: [
+      {
+        thread: {
+          source: { reference: "CASE-2026-000034" },
+          reportRevision: 2,
+          status: "closed",
+        },
+        events: [
+          {
+            actorName: "المشرف العام",
+            receivedAt: data.fetchedAt,
+            operation: { type: "request", text: "يرجى مقابلة ولي الأمر" },
+          },
+          {
+            actorName: "مشرف الصف",
+            receivedAt: data.fetchedAt,
+            operation: { type: "reply", text: "تمت المقابلة وتوثيق النتيجة" },
+          },
+        ],
+      },
+    ],
+  };
+  const r = profileReport(data);
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(await (await excelReportBlob(r)).arrayBuffer());
+  const cells = JSON.stringify(book.worksheets.map((s) => s.getSheetValues()));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sprv-reviewed-file-"));
+  try {
+    const file = path.join(dir, "student.docx");
+    fs.writeFileSync(
+      file,
+      Buffer.from(await (await wordReportBlob(r)).arrayBuffer()),
+    );
+    const xml = execFileSync("unzip", ["-p", file, "word/document.xml"], {
+      encoding: "utf8",
+    });
+    for (const value of [
+      "مشرف الغياب",
+      "٢٩/٠٩/٢٠٢٦",
+      "CASE-2026-000034",
+      "نسخة المراجعة: 2",
+      "طلب مغلق",
+      "يرجى مقابلة ولي الأمر",
+      "تمت المقابلة وتوثيق النتيجة",
+    ]) {
+      assert(cells.includes(value), "Excel: " + value);
+      assert(xml.includes(value), "Word: " + value);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

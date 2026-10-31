@@ -74,6 +74,23 @@ export function profileReport(history) {
       ["الشعبة", history.student.className],
       ["تقارير الحالات", arDigits(history.totals.caseReports)],
       ["أيام التأخر", arDigits(lateDates.length)],
+      [
+        "أيام الغياب المبلغ عنها",
+        history.absenceCoverage === false ||
+        typeof history.totals.absenceDays !== "number"
+          ? "—"
+          : arDigits(history.totals.absenceDays),
+      ],
+      ...(history.reviews
+        ? [
+            [
+              "تحديث المتابعات",
+              new Date(history.reviews.fetchedAt).toLocaleString("ar-KW", {
+                timeZone: "Asia/Kuwait",
+              }),
+            ],
+          ]
+        : []),
     ],
     tables: [
       {
@@ -97,6 +114,69 @@ export function profileReport(history) {
           dateLabel(date),
         ]),
       },
+      ...(history.absenceCoverage !== false &&
+      (typeof history.totals.absenceDays === "number" ||
+        history.records.some((r) => r.kind === "absence"))
+        ? [
+            {
+              title: "الغياب المبلغ عنه",
+              columns: ["التاريخ", "المشرف"],
+              rows: history.records
+                .filter((r) => r.kind === "absence")
+                .map((r) => [dateLabel(r.date), r.supervisorName]),
+            },
+          ]
+        : []),
+      ...(history.reviews
+        ? [
+            {
+              title: history.reviews.offline
+                ? "المتابعات المحفوظة على الجهاز"
+                : "ملاحظات الإشراف العام والمتابعة",
+              columns: ["بيانات المتابعة", "تفاصيل الملاحظة أو الرد"],
+              rows: history.reviews.threads.flatMap(({ thread, events }) =>
+                events
+                  .filter((e) => e.operation.type !== "open")
+                  .map((e) => [
+                    [
+                      thread.source?.reference ||
+                        dateLabel(thread.source?.date),
+                      "نسخة المراجعة: " + thread.reportRevision,
+                      thread.archivedAt
+                        ? "التقرير مسحوب"
+                        : {
+                            open: "طلب مفتوح",
+                            closed: "طلب مغلق",
+                            cancelled: "طلب ملغى",
+                            note: "ملاحظة",
+                          }[thread.status],
+                      e.actorName,
+                      new Date(e.receivedAt).toLocaleString("ar-KW", {
+                        timeZone: "Asia/Kuwait",
+                      }),
+                    ]
+                      .filter(Boolean)
+                      .join("\n"),
+                    [
+                      {
+                        request: "طلب متابعة",
+                        note: "ملاحظة",
+                        reply: "رد",
+                        acknowledge: "إقرار بالاطلاع",
+                        amend: "توضيح",
+                        close: "إغلاق الطلب",
+                        reopen: "إعادة فتح الطلب",
+                        cancel: "إلغاء الطلب",
+                      }[e.operation.type],
+                      e.operation.text,
+                    ]
+                      .filter(Boolean)
+                      .join(": "),
+                  ]),
+              ),
+            },
+          ]
+        : []),
     ],
     sections: [],
   };

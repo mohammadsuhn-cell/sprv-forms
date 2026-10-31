@@ -48,9 +48,12 @@ import {
   useDelivery,
   WithdrawalAction,
 } from "./delivery-ui.jsx";
-import { queueBackup } from "./delivery.js";
+import { queueBackup, readStudentData } from "./delivery.js";
+import { authoringKey, loadAuthoringRoster } from "./authoring.js";
 import { StudentHistory } from "./student-history.jsx";
 import { GeneralWorkspace } from "./general-workspace.jsx";
+import { ReviewProvider, ReviewBadge, ReviewPanel } from "./review-ui.jsx";
+import { OwnedReports } from "./owned-reports.jsx";
 import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
 import {
   caseReference,
@@ -63,9 +66,9 @@ const activationFragment = location.hash.startsWith("#activate=")
   : "";
 if (activationFragment)
   history.replaceState(null, "", location.pathname + location.search);
-function read() {
+function read(key = storageKey) {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = localStorage.getItem(key);
     return {
       data: raw ? validateStore(JSON.parse(raw)) : emptyStore(),
       error: "",
@@ -145,6 +148,8 @@ function OptionalPanel({ title, initialOpen = false, children }) {
 }
 
 function App() {
+  const activeStorageKey = useRef(storageKey);
+  const [authoringGrade, setAuthoringGrade] = useState("");
   const [writeAllowed, setWriteAllowed] = useState(!initial.error);
   const [data, updateData] = useState(initial.data),
     [page, setPage] = useState(activationFragment ? "settings" : "home"),
@@ -167,7 +172,7 @@ function App() {
     t = (ar, english) => (en ? english : ar),
     form = data.drafts[kind];
   const workspace = useWorkspaceLock(() => {
-    const latest = read();
+    const latest = read(activeStorageKey.current);
     currentData.current = latest.data;
     updateData(latest.data);
     setWriteAllowed(!latest.error);
@@ -183,7 +188,8 @@ function App() {
     workspace.status === "ready" && writeAllowed && !storageError,
   );
   const connected = delivery.connection;
-  const readOnlyConnection = connected?.supervisor.role === "general";
+  const isGeneral = connected?.supervisor.role === "general";
+  const readOnlyConnection = isGeneral && !connected.capabilities?.create;
   useEffect(() => {
     if (!readOnlyConnection) return;
     setPage((current) =>
@@ -197,6 +203,18 @@ function App() {
     setHistoryStudentId(studentId);
     setHistoryReturnPage(page);
     setPage("student-history");
+  }
+  async function refreshAuthoringRoster() {
+    setBusy("roster");
+    try {
+      const roster = await loadAuthoringRoster(readStudentData);
+      if (setData((d) => ({ ...d, roster })))
+        notify(t("تم تحديث قائمة الطلبة", "Student roster updated"));
+    } catch (e) {
+      notify(e.message || t("تعذّر تحديث القائمة", "Could not update roster"));
+    } finally {
+      setBusy("");
+    }
   }
   useEffect(() => {
     if (!workspace.owner.current || !writeAllowed || storageError) return;
@@ -223,8 +241,36 @@ function App() {
         )
       : [];
   async function activateProfile(connection) {
-    // A reader identity must not relabel this browser's existing drafts or store a null grade.
-    if (connection.supervisor.role === "general") return;
+    if (!workspace.owner.current) return;
+    const key = authoringKey(connection);
+    if (key !== activeStorageKey.current) {
+      const loaded = read(key);
+      activeStorageKey.current = key;
+      currentData.current = loaded.data;
+      updateData(loaded.data);
+      setWriteAllowed(!loaded.error);
+      setStorageError(loaded.error);
+      setPage((current) => (current === "settings" ? "settings" : "home"));
+      setKind("");
+      setReadyFile(null);
+      if (loaded.error) return;
+    }
+    if (connection.supervisor.role === "general") {
+      setData(
+        (d) => ({
+          ...d,
+          profile: {
+            ...d.profile,
+            supervisor: connection.supervisor.name,
+            syncSupervisorId: connection.supervisor.id,
+            grade: "",
+          },
+        }),
+        false,
+        connection,
+      );
+      return;
+    }
     setData((d) => {
       const next = withSupervisor(
         d,
@@ -267,14 +313,15 @@ function App() {
   }, [en]);
   // Persist during the action itself, including each settings keystroke.
   // Keep unsaved edits in memory if storage is unavailable, but never report success.
-  function setData(value, allowReset = false) {
+  function setData(value, allowReset = false, connection = connected) {
     if (!workspace.owner.current) return false;
+    if (authoringKey(connection) !== activeStorageKey.current) return false;
     const next =
       typeof value === "function" ? value(currentData.current) : value;
     let persisted = false;
     if (writeAllowed || allowReset) {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
+        localStorage.setItem(activeStorageKey.current, JSON.stringify(next));
         setStorageError("");
         persisted = true;
       } catch {
@@ -356,10 +403,25 @@ function App() {
           JSON.stringify(submissionForm(saved)) ===
             JSON.stringify(submissionForm(existing)),
       );
+    if (
+      isGeneral &&
+      (!existing || unchangedSavedForm) &&
+      !grades.includes(authoringGrade)
+    ) {
+      notify(t("اختر صف التقرير أولًا", "Choose the report grade first"));
+      return;
+    }
     const base =
       existing && !unchangedSavedForm
         ? existing
-        : newForm(k, data.profile, data.roster);
+        : newForm(
+            k,
+            {
+              ...data.profile,
+              ...(isGeneral ? { grade: authoringGrade } : {}),
+            },
+            data.roster,
+          );
     const draft =
       connected && !base.savedAt && !base.syncSupervisorId
         ? { ...base, syncSupervisorId: connected.supervisor.id }
@@ -389,7 +451,11 @@ function App() {
       return;
     const fresh = newForm(
       kind,
-      { ...data.profile, grade: form.grade || data.profile.grade },
+      {
+        ...data.profile,
+        grade:
+          (isGeneral && authoringGrade) || form.grade || data.profile.grade,
+      },
       data.roster,
     );
     setDraft(refreshDailyBrief(fresh, data.saved, data.roster));
@@ -516,7 +582,7 @@ function App() {
     let contents, filename;
     try {
       contents = !writeAllowed
-        ? localStorage.getItem(storageKey) ||
+        ? localStorage.getItem(activeStorageKey.current) ||
           JSON.stringify(currentData.current)
         : JSON.stringify(currentData.current, null, 2);
       filename = `supervision-backup-${today()}.json`;
@@ -556,6 +622,16 @@ function App() {
     try {
       if (file.size > 15000000) throw Error();
       const v = validateStore(JSON.parse(await file.text()));
+      if (
+        isGeneral &&
+        (v.profile.syncSupervisorId !== connected.supervisor.id ||
+          [...v.saved, ...Object.values(v.drafts)].some(
+            (f) =>
+              f.syncSupervisorId !== connected.supervisor.id ||
+              !grades.includes(f.grade),
+          ))
+      )
+        throw Error("Backup belongs to another author");
       if (
         !confirm(
           t(
@@ -616,7 +692,9 @@ function App() {
         )
       )
         return;
-      if (setData((d) => withRoster(d, roster)))
+      if (
+        setData((d) => (isGeneral ? { ...d, roster } : withRoster(d, roster)))
+      )
         notify(
           t(
             "تم حفظ قائمة الطلبة على هذا الجهاز",
@@ -627,7 +705,10 @@ function App() {
       notify(t("الملف ليس قائمة طلبة صالحة", "Invalid roster file"));
     }
   }
-  const availableClasses = rosterClasses(data.roster, data.profile.grade);
+  const availableClasses = rosterClasses(
+    data.roster,
+    form?.grade || data.profile.grade,
+  );
   const groupField = (f) =>
     f.key === "className" && availableClasses.length
       ? { ...f, kind: "select", options: availableClasses }
@@ -815,12 +896,12 @@ function App() {
       </main>
     );
   return (
-    <>
+    <ReviewProvider connection={connected}>
       <header className="topbar">
         <div className="brand">
           <div>
             <strong>
-              {readOnlyConnection
+              {isGeneral
                 ? t("الإشراف العام", "General supervision")
                 : t("نماذج الإشراف", "Supervision forms")}
             </strong>
@@ -844,8 +925,26 @@ function App() {
         </div>
       </header>
       <main
-        className={`${page === "form" ? "content editing" : "content"}${readOnlyConnection && page === "home" ? " general-content" : ""}${readyFile ? " has-ready-file" : ""}`}
+        className={`${page === "form" ? "content editing" : "content"}${isGeneral && page === "home" ? " general-content" : ""}${readyFile ? " has-ready-file" : ""}`}
       >
+        <ReviewBadge t={t} onOpen={() => setPage("reviews")} />
+        {page === "reviews" && <ReviewPanel t={t} />}
+        {isGeneral && !readOnlyConnection && (
+          <nav
+            className="record-tools"
+            aria-label={t("أعمال المشرف العام", "General supervisor actions")}
+          >
+            <button className="button" onClick={() => setPage("home")}>
+              {t("نظرة عامة", "Overview")}
+            </button>
+            <button className="button" onClick={() => setPage("create")}>
+              {t("إنشاء تقرير", "Create report")}
+            </button>
+            <button className="button" onClick={() => setPage("saved")}>
+              {t("تقاريري", "My reports")}
+            </button>
+          </nav>
+        )}
         {connected && page === "settings" && (
           <button
             className="delivery-status"
@@ -886,7 +985,7 @@ function App() {
           >
             {page === "student-history" && historyReturnPage === "form"
               ? t("العودة إلى النموذج", "Back to form")
-              : readOnlyConnection
+              : isGeneral
                 ? t("الإشراف العام", "General supervision")
                 : t("النماذج", "Forms")}
           </button>
@@ -902,29 +1001,32 @@ function App() {
             onSettings={() => setPage("settings")}
           />
         )}
-        {connected && delivery.ready && !readOnlyConnection && (
-          <SchoolSnapshotWorkspace
-            key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.grade}:${connected.endpoint}`}
-            connection={connected}
-            lang={data.lang}
-            t={t}
-            active={page === "student-history"}
-            showSettings={page === "settings"}
-            onSettings={() => setPage("settings")}
-          >
-            {page === "student-history" && (
-              <StudentHistory
-                connection={connected}
-                ready={delivery.ready}
-                initialStudentId={historyStudentId}
-                lang={data.lang}
-                t={t}
-                onSettings={() => setPage("settings")}
-              />
-            )}
-          </SchoolSnapshotWorkspace>
-        )}
-        {readOnlyConnection && (
+        {connected &&
+          delivery.ready &&
+          !readOnlyConnection &&
+          (!isGeneral || page === "student-history") && (
+            <SchoolSnapshotWorkspace
+              key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.grade}:${connected.endpoint}`}
+              connection={connected}
+              lang={data.lang}
+              t={t}
+              active={page === "student-history"}
+              showSettings={page === "settings"}
+              onSettings={() => setPage("settings")}
+            >
+              {page === "student-history" && (
+                <StudentHistory
+                  connection={connected}
+                  ready={delivery.ready}
+                  initialStudentId={historyStudentId}
+                  lang={data.lang}
+                  t={t}
+                  onSettings={() => setPage("settings")}
+                />
+              )}
+            </SchoolSnapshotWorkspace>
+          )}
+        {isGeneral && (
           <GeneralWorkspace
             key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
             connection={connected}
@@ -938,91 +1040,146 @@ function App() {
         {page === "home" && !delivery.ready && (
           <p role="status">{t("جارٍ تحميل الاتصال…", "Loading connection…")}</p>
         )}
-        {page === "home" && delivery.ready && !readOnlyConnection && (
-          <>
-            <div className="page-heading">
-              <h1>{t("النماذج", "Forms")}</h1>
-              <button className="button" onClick={() => setPage("saved")}>
-                {t("السجلات والمتابعة", "Records & follow-up")}
-                <span className="count">{data.saved.length}</span>
-              </button>
-            </div>
-            {!data.profile.supervisor && (
-              <button className="setup" onClick={() => setPage("settings")}>
-                <span>{t("إعداد اسم المشرف", "Set supervisor name")}</span>
-              </button>
-            )}
-            {data.profile.school && (
-              <div className="school-line">
-                <strong>{data.profile.school}</strong>
-                <span>{schoolIdentity.year}</span>
-              </div>
-            )}
-            {data.roster && (
-              <div className="roster-home">
-                <span>
-                  {data.profile.grade || rosterGrades(data.roster).join("، ")}
-                </span>
-                <span>
-                  {arDigits(
-                    data.roster.students.filter(
-                      (s) =>
-                        !data.profile.grade || s.grade === data.profile.grade,
-                    ).length,
-                  )}{" "}
-                  {t("طالبًا", "students")}
-                </span>
-              </div>
-            )}
-            <div className="form-cards">
-              <button
-                className="form-card"
-                onClick={() => openStudentHistory()}
-              >
-                <div>
-                  <h2>{t("سجل الطالب", "Student history")}</h2>
-                </div>
-              </button>
-              {[
-                ["case", "تسجيل حالة", "Record a case"],
-                ["daily", "الموجز اليومي", "Daily brief"],
-                ["absence", "إحصائية الغياب اليومي", "Daily absence sheet"],
-                ["late", "الطلبة المتأخرون", "Late students"],
-                ["staffing", "سجل المعلمين والبدلاء", "Teachers & substitutes"],
-              ]
-                .filter(() => !readOnlyConnection)
-                .map(([key, ar, english]) => (
+        {((page === "home" && !isGeneral) ||
+          (page === "create" && isGeneral)) &&
+          delivery.ready &&
+          !readOnlyConnection && (
+            <>
+              {isGeneral && (
+                <section className="panel">
+                  <Field
+                    lang={data.lang}
+                    field={{
+                      key: "grade",
+                      ar: "صف التقرير الجديد",
+                      en: "New report grade",
+                      kind: "select",
+                      options: grades,
+                    }}
+                    value={authoringGrade}
+                    onChange={setAuthoringGrade}
+                  />
                   <button
-                    key={key}
-                    className="form-card"
-                    onClick={() => openKind(key)}
+                    className="button"
+                    disabled={!!busy}
+                    onClick={refreshAuthoringRoster}
                   >
-                    <div>
-                      <h2>{t(ar, english)}</h2>
-                    </div>
+                    {t("تحديث قائمة الطلبة", "Update student roster")}
                   </button>
-                ))}
-            </div>
-            {data.saved.length > 0 && (
-              <section className="recent">
-                <div className="section-heading">
-                  {sectionTitle("آخر المحفوظات", "Recent forms")}
-                  <button
-                    className="text-button"
-                    onClick={() => setPage("saved")}
-                  >
-                    {t("عرض الكل", "View all")}
-                  </button>
+                  <p>
+                    {t(
+                      "تستأنف المسودة غير المكتملة بصفها الأصلي. يبدأ التقرير المحفوظ نموذجًا جديدًا.",
+                      "Unfinished drafts resume in their original grade. Completed reports start a fresh form.",
+                    )}
+                  </p>
+                </section>
+              )}
+              <div className="page-heading">
+                <h1>{t("النماذج", "Forms")}</h1>
+                <button className="button" onClick={() => setPage("saved")}>
+                  {t("السجلات والمتابعة", "Records & follow-up")}
+                  <span className="count">{data.saved.length}</span>
+                </button>
+              </div>
+              {!data.profile.supervisor && (
+                <button className="setup" onClick={() => setPage("settings")}>
+                  <span>{t("إعداد اسم المشرف", "Set supervisor name")}</span>
+                </button>
+              )}
+              {data.profile.school && (
+                <div className="school-line">
+                  <strong>{data.profile.school}</strong>
+                  <span>{schoolIdentity.year}</span>
                 </div>
-                {data.saved.slice(0, 3).map((s) => (
-                  <SavedRow key={s.id} item={s} />
-                ))}
-              </section>
-            )}
-          </>
-        )}
+              )}
+              {data.roster && (
+                <div className="roster-home">
+                  <span>
+                    {data.profile.grade || rosterGrades(data.roster).join("، ")}
+                  </span>
+                  <span>
+                    {arDigits(
+                      data.roster.students.filter(
+                        (s) =>
+                          !data.profile.grade || s.grade === data.profile.grade,
+                      ).length,
+                    )}{" "}
+                    {t("طالبًا", "students")}
+                  </span>
+                </div>
+              )}
+              <div className="form-cards">
+                <button
+                  className="form-card"
+                  onClick={() => openStudentHistory()}
+                >
+                  <div>
+                    <h2>{t("سجل الطالب", "Student history")}</h2>
+                  </div>
+                </button>
+                {[
+                  ["case", "تسجيل حالة", "Record a case"],
+                  ["daily", "الموجز اليومي", "Daily brief"],
+                  ["absence", "إحصائية الغياب اليومي", "Daily absence sheet"],
+                  ["late", "الطلبة المتأخرون", "Late students"],
+                  [
+                    "staffing",
+                    "سجل المعلمين والبدلاء",
+                    "Teachers & substitutes",
+                  ],
+                ]
+                  .filter(() => !readOnlyConnection)
+                  .map(([key, ar, english]) => (
+                    <button
+                      key={key}
+                      className="form-card"
+                      onClick={() => openKind(key)}
+                    >
+                      <div>
+                        <h2>{t(ar, english)}</h2>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+              {data.saved.length > 0 && (
+                <section className="recent">
+                  <div className="section-heading">
+                    {sectionTitle("آخر المحفوظات", "Recent forms")}
+                    <button
+                      className="text-button"
+                      onClick={() => setPage("saved")}
+                    >
+                      {t("عرض الكل", "View all")}
+                    </button>
+                  </div>
+                  {data.saved.slice(0, 3).map((s) => (
+                    <SavedRow key={s.id} item={s} />
+                  ))}
+                </section>
+              )}
+            </>
+          )}
         {page === "form" && form && !readOnlyConnection && (
           <>
+            {isGeneral && (
+              <section className="panel">
+                <p>
+                  <strong>{form.grade}</strong> · {connected.supervisor.name}
+                </p>
+                <Field
+                  lang={data.lang}
+                  field={{
+                    key: "newGrade",
+                    ar: "صف النموذج الجديد عند الضغط على جديد",
+                    en: "Grade for the next new form",
+                    kind: "select",
+                    options: grades,
+                  }}
+                  value={authoringGrade || form.grade}
+                  onChange={setAuthoringGrade}
+                />
+              </section>
+            )}
             <div className="page-heading">
               <div>
                 <h1>
@@ -1087,20 +1244,30 @@ function App() {
                 Field={Field}
               />
             ) : isLinkedDaily(form) ? (
-              <DailyBrief
-                form={form}
-                saved={data.saved}
-                roster={data.roster}
-                lang={data.lang}
-                onChange={setDraft}
-                Field={Field}
-              />
+              <>
+                {isGeneral && (
+                  <p className="hint">
+                    {t(
+                      "يعتمد هذا الموجز على تقاريري المحفوظة للصف والتاريخ المحددين.",
+                      "This brief uses my saved reports for the selected grade and date.",
+                    )}
+                  </p>
+                )}
+                <DailyBrief
+                  form={form}
+                  saved={data.saved}
+                  roster={data.roster}
+                  lang={data.lang}
+                  onChange={setDraft}
+                  Field={Field}
+                />
+              </>
             ) : kind === "case" ? (
               <>
                 <CaseEditor
                   form={form}
                   roster={data.roster}
-                  grade={data.profile.grade}
+                  grade={form.grade || data.profile.grade}
                   lang={data.lang}
                   onChange={setDraft}
                   onOpenHistory={connected ? openStudentHistory : undefined}
@@ -1317,6 +1484,13 @@ function App() {
         )}
         {page === "saved" && !readOnlyConnection && (
           <>
+            {connected?.capabilities?.create && (
+              <OwnedReports
+                key={connected.serverId + ":" + connected.supervisor.id}
+                lang={data.lang}
+                t={t}
+              />
+            )}
             <div className="page-heading">
               <h1>{t("السجلات والمتابعة", "Records & follow-up")}</h1>
               <span className="count">{data.saved.length}</span>
@@ -1401,24 +1575,26 @@ function App() {
                       ),
                     )}
                   </div>
-                  <Field
-                    lang={data.lang}
-                    field={{
-                      key: "grade",
-                      ar: "الصف المسؤول عنه",
-                      en: "Assigned grade",
-                      kind: "select",
-                      options: grades,
-                    }}
-                    value={data.profile.grade || ""}
-                    disabled={Boolean(connected)}
-                    onChange={(grade) =>
-                      setData((d) => ({
-                        ...d,
-                        profile: { ...d.profile, grade },
-                      }))
-                    }
-                  />
+                  {!isGeneral && (
+                    <Field
+                      lang={data.lang}
+                      field={{
+                        key: "grade",
+                        ar: "الصف المسؤول عنه",
+                        en: "Assigned grade",
+                        kind: "select",
+                        options: grades,
+                      }}
+                      value={data.profile.grade || ""}
+                      disabled={Boolean(connected)}
+                      onChange={(grade) =>
+                        setData((d) => ({
+                          ...d,
+                          profile: { ...d.profile, grade },
+                        }))
+                      }
+                    />
+                  )}
                   <div className="settings-save">
                     <button className="button primary" onClick={saveSettings}>
                       {t("حفظ الإعدادات", "Save settings")}
@@ -1629,7 +1805,7 @@ function App() {
           {t("جارٍ تجهيز الملف…", "Preparing document…")}
         </div>
       )}
-    </>
+    </ReviewProvider>
   );
   function SavedRow({ item, remove = false }) {
     const receipt = delivery.records.find((r) => r.formId === item.id);

@@ -45,3 +45,15 @@ Cases support **إضافة طالب آخر** for a single incident involving mul
 Activated grade supervisors can choose **تحديث سجل الصف / Update grade history** in Student history to save their assigned grade's roster and all received cases and lateness reports, including other supervisors' submissions. Profiles, case details and exports then work offline from the saved copy. The timestamp shows its age; another update receives new reports, corrections and withdrawals. Settings offers separate grade-history backup/restore, bound to the same receiver, account and grade. Drafts, signing keys and ordinary forms backups remain separate. No roster import is needed to browse shared history. The forms site must have cached its application assets to reopen offline; fresh data requires the receiver online. Deploy/restart the matching receiver before publishing.
 
 The offline snapshot model is generated from `sprv/shared` by `node scripts/update-snapshot-model.mjs` in the receiver repository. Keep both copies synchronized when changing matching, counting or backup contracts. Snapshot files contain school data and must never be placed in this public repository.
+
+## General-supervisor authoring, returned notes and student files
+
+Activated general accounts can select a grade, load the receiver's roster, and create their own reports. Their workspace is separate from any ordinary supervisor workspace already saved on the device. Corrections and withdrawal retain the original author/device rules; received copies are available under My reports on other activated devices.
+
+A general reviewer can add a note or follow-up request to another author's received report. The original author receives it in General-supervisor notes, can acknowledge it and reply, and the initiating reviewer closes/reopens/cancels requests. Neither acknowledgement nor closure changes the action in the source report. Threads retain the reviewed revision; source withdrawal archives the conversation.
+
+Student files include matching case reports, lateness and reported absence, plus the account's authorized review conversations in PDF/Word/Excel exports. School-wide staffing and daily summaries are not student incidents. Older saved grade snapshots must be refreshed to establish absence coverage; unknown coverage is not displayed as zero.
+
+Notes have their own durable, account-scoped outbox. Offline messages survive reload and retry with the same ID. A backup of drafts/pending notes can be downloaded and restored from the notes inbox; activation credentials are excluded. Accepted conversations live in receiver backups. The app refreshes while visible/online; it does not send push notifications after closing. Cached exports show their update time, and incomplete conversations are not silently represented as complete.
+
+Deploy the compatible receiver before publishing this app. The receiver capability response controls authoring/review availability. Existing grade submissions and older student-history clients remain supported. Integration validation lives in the local app repository: `npm run check:review` and `npm run check:general` after building this project.

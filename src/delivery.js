@@ -1,6 +1,7 @@
 // Device credentials and pending submissions are deliberately separate from portable JSON backups.
 // The private signing key is non-exportable and never placed in localStorage or an activation URL.
 import { storageKey, validateStore } from "./model.js";
+import { authoringKey } from "./authoring.js";
 import { submissionForm, validCaseReference } from "./case-reference.js";
 import {
   snapshotOwner,
@@ -172,11 +173,12 @@ const publicConnection = (c) =>
         deviceId: c.deviceId,
         supervisor: c.supervisor,
         endpoint: c.endpoint,
+        capabilities: c.capabilities,
       }
     : null;
 
 // Shared history is fetched on demand, never added to local forms or the delivery queue.
-async function signedRead(action, params) {
+export async function signedRead(action, params = {}) {
   const connection = await readSetting("connection");
   if (!connection)
     throw Object.assign(Error("فعّل اتصال المشرف من الإعدادات أولًا"), {
@@ -271,6 +273,7 @@ export async function readGeneralData(action, params = {}) {
   return data;
 }
 export async function readStudentData(action, params = {}) {
+  params = { ...params, studentFileVersion: 2 };
   if (!["students", "student-history", "student-report"].includes(action))
     throw Error("طلب سجل غير صالح");
   const data = await signedRead(action, params);
@@ -325,7 +328,11 @@ function jobFor(row, c, revision = (row.receipt?.revision || 0) + 1) {
 // at the next revision. A lost reply must never cause us to skip a revision.
 export async function queueWithdrawal(formId) {
   const connection = await readSetting("connection");
-  if (!connection || connection.supervisor.role === "general")
+  if (
+    !connection ||
+    (connection.supervisor.role === "general" &&
+      !connection.capabilities?.create)
+  )
     throw Error("اتصال مشرف الصف مطلوب");
   const id = `${connection.serverId}:${connection.supervisor.id}:${formId}`;
   await transaction("records", "readwrite", async (s) => {
@@ -353,7 +360,12 @@ export async function queueWithdrawal(formId) {
 // Only an explicit backup download creates a job. Draft changes never call this.
 export async function queueBackup(contents, filename) {
   const connection = await readSetting("connection");
-  if (!connection || connection.supervisor.role === "general") return null;
+  if (
+    !connection ||
+    (connection.supervisor.role === "general" &&
+      !connection.capabilities?.create)
+  )
+    return null;
   if (new Blob([contents]).size > 15000000)
     throw Error("النسخة أكبر من حد الإرسال (١٥ ميغابايت)");
   validateStore(JSON.parse(contents));
@@ -377,8 +389,13 @@ export async function queueBackup(contents, filename) {
 }
 export async function reconcileSaved() {
   const connection = await readSetting("connection");
-  if (!connection || connection.supervisor.role === "general") return;
-  const raw = localStorage.getItem(storageKey);
+  if (
+    !connection ||
+    (connection.supervisor.role === "general" &&
+      !connection.capabilities?.create)
+  )
+    return;
+  const raw = localStorage.getItem(authoringKey(connection));
   const store = raw ? JSON.parse(raw) : null;
   if (!Array.isArray(store?.saved)) return;
   for (const saved of store.saved) {
@@ -443,7 +460,12 @@ export async function deliver() {
 }
 async function deliverOnce() {
   const connection = await readSetting("connection");
-  if (!connection || connection.supervisor.role === "general") return;
+  if (
+    !connection ||
+    (connection.supervisor.role === "general" &&
+      !connection.capabilities?.create)
+  )
+    return;
   await reconcileSaved();
   const rows = await transaction("records", "readonly", (s) =>
     request(s.getAll()),
@@ -598,6 +620,32 @@ export async function deliveryState() {
   };
 }
 
+export async function refreshCapabilities() {
+  const before = await readSetting("connection");
+  if (!before) return;
+  try {
+    const session = await signedRead("session");
+    const current = await readSetting("connection");
+    if (
+      !current ||
+      !sameConnection(before, current) ||
+      session.supervisor?.id !== current.supervisor.id ||
+      session.serverId !== current.serverId
+    )
+      return;
+    await writeSetting("connection", {
+      ...current,
+      capabilities: session.capabilities,
+    });
+  } catch (e) {
+    if ([403, 404].includes(e.status)) {
+      const current = await readSetting("connection");
+      if (current && sameConnection(before, current))
+        await writeSetting("connection", { ...current, capabilities: {} });
+    }
+  }
+}
+
 // Read snapshots live separately from drafts, submissions and keys.
 const snapshotAccount = snapshotOwner;
 const assertSnapshotConnection = (current, expected) => {
@@ -612,7 +660,7 @@ const assertSnapshotConnection = (current, expected) => {
     throw Object.assign(Error("Connection changed"), { code: "unpaired" });
 };
 export const readSchoolSnapshotPage = (params = {}) =>
-  signedRead("school-snapshot", params);
+  signedRead("school-snapshot", { ...params, studentFileVersion: 2 });
 export async function readSavedSchoolSnapshot(expected) {
   return transaction("settings", "readonly", async (store) => {
     const current = await request(store.get("connection"));

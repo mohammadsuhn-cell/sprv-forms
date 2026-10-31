@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useReads } from "./read-context.jsx";
 import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
+import { ReviewPanel } from "./review-ui.jsx";
 import {
   ReportContent,
   StudentDirectory,
@@ -389,7 +390,7 @@ function Drilldown({
   );
 }
 
-function ReceivedExports({ detail, lang, t, children }) {
+export function ReceivedExports({ detail, lang, t, children }) {
   const [busy, setBusy] = useState(false),
     [file, setFile] = useState(null),
     [error, setError] = useState("");
@@ -551,6 +552,12 @@ function ReceivedReport({
               ))}
             </details>
           </ReceivedExports>
+          <ReviewPanel
+            recordId={record.id}
+            revision={page.data.revision}
+            t={t}
+            canCreate
+          />
         </>
       )}
     </section>

@@ -2,7 +2,7 @@ import { rosterClasses, rosterGrades, classStudents } from "./roster.js";
 
 export function initializeAbsence(form, roster, grade, makeId) {
   const available = rosterGrades(roster);
-  grade = available.includes(grade) ? grade : available[0] || "";
+  grade = grade || available[0] || "";
   const classes = rosterClasses(roster, grade).map((className) => ({
     id: makeId(),
     className,
