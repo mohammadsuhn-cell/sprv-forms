@@ -190,6 +190,7 @@ function App() {
   const connected = delivery.connection;
   const isGeneral = connected?.supervisor.role === "general";
   const readOnlyConnection = isGeneral && !connected.capabilities?.create;
+  const rosterLoadFor = useRef("");
   useEffect(() => {
     if (!readOnlyConnection) return;
     setPage((current) =>
@@ -216,6 +217,21 @@ function App() {
       setBusy("");
     }
   }
+  useEffect(() => {
+    if (!isGeneral || !delivery.ready || readOnlyConnection || data.roster)
+      return;
+    const account = `${connected.serverId}:${connected.supervisor.id}`;
+    if (rosterLoadFor.current === account) return;
+    rosterLoadFor.current = account;
+    void refreshAuthoringRoster();
+  }, [
+    isGeneral,
+    delivery.ready,
+    readOnlyConnection,
+    connected?.serverId,
+    connected?.supervisor.id,
+    data.roster,
+  ]);
   useEffect(() => {
     if (!workspace.owner.current || !writeAllowed || storageError) return;
     const next = withReceivedReferences(currentData.current, delivery.records);
@@ -934,9 +950,6 @@ function App() {
             className="record-tools"
             aria-label={t("أعمال المشرف العام", "General supervisor actions")}
           >
-            <button className="button" onClick={() => setPage("home")}>
-              {t("نظرة عامة", "Overview")}
-            </button>
             <button className="button" onClick={() => setPage("create")}>
               {t("إنشاء تقرير", "Create report")}
             </button>
@@ -1026,17 +1039,18 @@ function App() {
               )}
             </SchoolSnapshotWorkspace>
           )}
-        {isGeneral && (
-          <GeneralWorkspace
-            key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
-            connection={connected}
-            lang={data.lang}
-            t={t}
-            active={page === "home"}
-            showSettings={page === "settings"}
-            onSettings={() => setPage("settings")}
-          />
-        )}
+        {isGeneral &&
+          ["home", "settings", "student-history"].includes(page) && (
+            <GeneralWorkspace
+              key={`${connected.serverId}:${connected.deviceId}:${connected.supervisor.id}:${connected.supervisor.role}:${connected.supervisor.grade}:${connected.endpoint}`}
+              connection={connected}
+              lang={data.lang}
+              t={t}
+              active={page === "home"}
+              showSettings={page === "settings"}
+              onSettings={() => setPage("settings")}
+            />
+          )}
         {page === "home" && !delivery.ready && (
           <p role="status">{t("جارٍ تحميل الاتصال…", "Loading connection…")}</p>
         )}
@@ -1059,17 +1073,20 @@ function App() {
                     value={authoringGrade}
                     onChange={setAuthoringGrade}
                   />
-                  <button
-                    className="button"
-                    disabled={!!busy}
-                    onClick={refreshAuthoringRoster}
-                  >
-                    {t("تحديث قائمة الطلبة", "Update student roster")}
-                  </button>
-                  <p>
+                  {data.roster && (
+                    <button
+                      className="text-control"
+                      disabled={!!busy}
+                      onClick={refreshAuthoringRoster}
+                    >
+                      {t("تحديث قائمة الطلبة", "Refresh student list")} ·{" "}
+                      {arDigits(data.roster.students.length)}
+                    </button>
+                  )}
+                  <p className="hint">
                     {t(
-                      "تستأنف المسودة غير المكتملة بصفها الأصلي. يبدأ التقرير المحفوظ نموذجًا جديدًا.",
-                      "Unfinished drafts resume in their original grade. Completed reports start a fresh form.",
+                      "تُستأنف المسودة بصفها؛ والتقرير المحفوظ يبدأ نموذجًا جديدًا.",
+                      "Drafts resume in their grade; saved reports start a new form.",
                     )}
                   </p>
                 </section>
