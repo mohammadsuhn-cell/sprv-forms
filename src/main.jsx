@@ -6,7 +6,7 @@ import {
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import { useWorkspaceLock } from "./workspace-lock.jsx";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/noto-sans-arabic/400.css";
 import "@fontsource/noto-sans-arabic/600.css";
@@ -135,13 +135,12 @@ function Field({ field, value, onChange, lang, disabled = false }) {
 }
 
 function OptionalPanel({ title, initialOpen = false, children }) {
-  const [open, setOpen] = useState(initialOpen);
+  const detailsRef = useRef(null);
+  useLayoutEffect(() => {
+    if (detailsRef.current) detailsRef.current.open = initialOpen;
+  }, []);
   return (
-    <details
-      className="panel optional"
-      open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-    >
+    <details ref={detailsRef} className="panel optional">
       <summary>{title}</summary>
       {children}
     </details>
@@ -1232,7 +1231,7 @@ function App() {
             <OptionalPanel
               key={form.id}
               initialOpen={!form.supervisor}
-              title={form.school || t("بيانات المدرسة", "School details")}
+              title={t("بيانات المدرسة", "School details")}
             >
               <div className="fields">
                 <div className="school-identity wide">

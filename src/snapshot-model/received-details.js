@@ -21,6 +21,14 @@ export function studentReportView(row, studentId, students) {
     );
     form.notes = '';
   }
+  if (form.kind === 'cases') {
+    form.rows = (form.rows || []).filter((entry) =>
+      receivedStudentContext({ ...form, rows: [entry] }, students, row.grade).some(
+        (match) => match.localStudent?.id === studentId,
+      ),
+    );
+    form.notes = '';
+  }
   if (form.kind === 'absence')
     return {
       report: {
