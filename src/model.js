@@ -729,6 +729,7 @@ export const emptyStore = () => ({
   profile: { ...schoolIdentity, supervisor: "", grade: "" },
   roster: null,
   drafts: {},
+  draftArchive: [],
   saved: [],
   lang: "ar",
 });
@@ -753,7 +754,14 @@ export function validateStore(value) {
   const roster = value.roster == null ? null : validateRoster(value.roster);
   for (const [key, draft] of Object.entries(value.drafts))
     if (!titles[key] || draft.kind !== key) throw Error("Invalid draft");
-  const forms = [...value.saved, ...Object.values(value.drafts)];
+  const draftArchive =
+    value.draftArchive === undefined ? [] : value.draftArchive;
+  if (!Array.isArray(draftArchive)) throw Error("Invalid draft archive");
+  const forms = [
+    ...value.saved,
+    ...Object.values(value.drafts),
+    ...draftArchive,
+  ];
   if (forms.length > 2000) throw Error("Too many forms");
   for (const v of forms) {
     if (
@@ -813,6 +821,12 @@ export function validateStore(value) {
   }
   if (new Set(value.saved.map((v) => v.id)).size !== value.saved.length)
     throw Error("Duplicate records");
+  if (
+    new Set([...Object.values(value.drafts), ...draftArchive].map((v) => v.id))
+      .size !==
+    Object.keys(value.drafts).length + draftArchive.length
+  )
+    throw Error("Duplicate drafts");
   return {
     ...value,
     profile: {
@@ -823,6 +837,7 @@ export function validateStore(value) {
     drafts: Object.fromEntries(
       Object.entries(value.drafts).map(([k, v]) => [k, withSchoolIdentity(v)]),
     ),
+    draftArchive: draftArchive.map(withSchoolIdentity),
     lang: value.lang === "en" ? "en" : "ar",
   };
 }
@@ -867,19 +882,22 @@ export function caseRegister(saved, profile = {}) {
 // Apply the device owner's name to unfinished drafts, preserving historical authors.
 export function withSupervisor(store, supervisor) {
   const previous = store.profile.supervisor;
+  const updateDraft = (draft) =>
+    !draft.savedAt &&
+    !store.saved.some((saved) => saved.id === draft.id) &&
+    (!draft.supervisor.trim() || draft.supervisor === previous)
+      ? { ...draft, supervisor }
+      : draft;
   return {
     ...store,
     profile: { ...store.profile, supervisor },
     drafts: Object.fromEntries(
       Object.entries(store.drafts).map(([kind, draft]) => [
         kind,
-        !draft.savedAt &&
-        !store.saved.some((saved) => saved.id === draft.id) &&
-        (!draft.supervisor.trim() || draft.supervisor === previous)
-          ? { ...draft, supervisor }
-          : draft,
+        updateDraft(draft),
       ]),
     ),
+    draftArchive: (store.draftArchive || []).map(updateDraft),
   };
 }
 

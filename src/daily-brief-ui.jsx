@@ -7,7 +7,15 @@ import {
   refreshDailyBrief,
 } from "./daily-brief.js";
 
-export function DailyBrief({ form, saved, roster, lang, onChange, Field }) {
+export function DailyBrief({
+  form,
+  saved,
+  roster,
+  lang,
+  onChange,
+  onDateChange,
+  Field,
+}) {
   const t = (ar, en) => (lang === "en" ? en : ar);
   const count = (value) =>
     value === null
@@ -36,7 +44,9 @@ export function DailyBrief({ form, saved, roster, lang, onChange, Field }) {
             lang={lang}
             field={{ ar: "التاريخ", en: "Date", kind: "date" }}
             value={form.date}
-            onChange={(value) => scope("date", value)}
+            onChange={(value) =>
+              onDateChange ? onDateChange(value) : scope("date", value)
+            }
           />
           <Field
             lang={lang}

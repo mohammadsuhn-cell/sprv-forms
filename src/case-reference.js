@@ -47,5 +47,6 @@ export function withReceivedReferences(store, records) {
   const drafts = Object.fromEntries(
     Object.entries(store.drafts).map(([k, f]) => [k, apply(f)]),
   );
-  return changed ? { ...store, saved, drafts } : store;
+  const draftArchive = (store.draftArchive || []).map(apply);
+  return changed ? { ...store, saved, drafts, draftArchive } : store;
 }

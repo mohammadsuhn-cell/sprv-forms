@@ -13,6 +13,7 @@ export function AbsenceChecklist({
   roster,
   lang,
   onChange,
+  onDateChange,
   onSettings,
   Field,
 }) {
@@ -48,11 +49,13 @@ export function AbsenceChecklist({
             field={{ ar: "التاريخ", en: "Date", kind: "date" }}
             value={form.date}
             onChange={(date) =>
-              onChange({
-                ...form,
-                date,
-                classes: form.classes.map((c) => ({ ...c, confirmed: "" })),
-              })
+              onDateChange
+                ? onDateChange(date)
+                : onChange({
+                    ...form,
+                    date,
+                    classes: form.classes.map((c) => ({ ...c, confirmed: "" })),
+                  })
             }
           />
           <Field

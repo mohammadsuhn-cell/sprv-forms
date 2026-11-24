@@ -463,6 +463,78 @@ h2 {
   display: block;
   margin-top: 7px;
 }
+.form-state {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.form-state-received {
+  color: #266343;
+}
+.form-state-edited,
+.form-state-pending,
+.form-state-blocked {
+  color: #81531d;
+}
+.form-date-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 20px;
+  background: #fff6e7;
+  border: 1px solid #e6cfaa;
+  border-radius: 8px;
+}
+.draft-list {
+  margin-top: 20px;
+}
+.draft-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.draft-open {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+}
+.draft-open strong,
+.draft-open span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.draft-open span {
+  font-size: 13px;
+  margin-top: 5px;
+}
+.draft-resume {
+  color: var(--muted);
+}
+.file-submission-note {
+  margin: 12px 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.file-save {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.file-ready {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
+.content.editing.has-ready-file {
+  padding-bottom: 370px;
+}
 .action-bar {
   position: fixed;
   bottom: 0;

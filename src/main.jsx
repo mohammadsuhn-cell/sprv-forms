@@ -6,6 +6,22 @@ import {
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import { useWorkspaceLock } from "./workspace-lock.jsx";
+import {
+  activateDraft,
+  discardDraft,
+  unfinishedDrafts,
+  openWorkspaceForm,
+  saveWorkspaceForm,
+  mergeWorkspaceBackup,
+  formState,
+  isDailyForm,
+} from "./form-workspace.js";
+import {
+  DraftList,
+  FormLaunchers,
+  statusText,
+  saveText,
+} from "./form-workspace-ui.jsx";
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/noto-sans-arabic/400.css";
@@ -26,7 +42,6 @@ import {
   groups,
   caseSections,
   newRow,
-  newForm,
   emptyStore,
   storageKey,
   validateStore,
@@ -59,7 +74,6 @@ import {
   caseReference,
   caseReferenceLabel,
   shortCaseReference,
-  submissionForm,
   withReceivedReferences,
 } from "./case-reference.js";
 const activationFragment = location.hash.startsWith("#activate=")
@@ -190,6 +204,35 @@ function App() {
   const connected = delivery.connection;
   const isGeneral = connected?.supervisor.role === "general";
   const readOnlyConnection = isGeneral && !connected.capabilities?.create;
+  const excludedForms = delivery.records
+    .filter((r) => r.withdrawalRequestedAt)
+    .map((r) => r.formId);
+  const pendingDrafts = unfinishedDrafts(data).filter(
+    (f) => !excludedForms.includes(f.id),
+  );
+  const entryProfile = {
+    ...data.profile,
+    grade: isGeneral
+      ? authoringGrade
+      : data.profile.grade || rosterGrades(data.roster)[0] || "",
+  };
+  const editorState = form ? formState(data, form, delivery.records) : "draft";
+  const canSave =
+    ["draft", "edited", ...(connected ? ["local"] : [])].includes(
+      editorState,
+    ) || Boolean(storageError);
+  const saveLabel = saveText(editorState, Boolean(connected), t);
+  const exportNotice = ["draft", "edited"].includes(editorState)
+    ? t(
+        "هذا الملف من مسودة. تنزيله لا يحفظ التقرير ولا يرسله؛ استخدم زر الحفظ أدناه.",
+        "This file is from a draft. Downloading does not save or submit the report; use Save below.",
+      )
+    : connected && editorState !== "received"
+      ? t(
+          "تنزيل الملف لا يؤكد استلام الإشراف العام للتقرير.",
+          "Downloading the file does not confirm receipt by general supervision.",
+        )
+      : "";
   const rosterLoadFor = useRef("");
   useEffect(() => {
     if (!readOnlyConnection) return;
@@ -406,76 +449,71 @@ function App() {
           : { ...d, profile: { ...d.profile, [key]: value } },
       );
   }
-  function openKind(k) {
+  function openKind(k, date = today(), profile = entryProfile) {
     if (readOnlyConnection) return;
-    setKind(k);
-    const existing = data.drafts[k];
-    // Resume unfinished work, but don't reuse a completed record for new entry.
-    const unchangedSavedForm =
-      existing &&
-      data.saved.some(
-        (saved) =>
-          saved.id === existing.id &&
-          JSON.stringify(submissionForm(saved)) ===
-            JSON.stringify(submissionForm(existing)),
-      );
-    if (
-      isGeneral &&
-      (!existing || unchangedSavedForm) &&
-      !grades.includes(authoringGrade)
-    ) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    if (isGeneral && !grades.includes(profile.grade)) {
       notify(t("اختر صف التقرير أولًا", "Choose the report grade first"));
       return;
     }
-    const base =
-      existing && !unchangedSavedForm
-        ? existing
-        : newForm(
+    try {
+      if (
+        !setData((d) =>
+          openWorkspaceForm(
+            d,
             k,
             {
-              ...data.profile,
-              ...(isGeneral ? { grade: authoringGrade } : {}),
+              ...profile,
+              ...(connected
+                ? { syncSupervisorId: connected.supervisor.id }
+                : {}),
             },
-            data.roster,
-          );
-    const draft =
-      connected && !base.savedAt && !base.syncSupervisorId
-        ? { ...base, syncSupervisorId: connected.supervisor.id }
-        : base;
-    const prepared =
-      k === "case"
-        ? prepareCaseDraft(draft)
-        : isLinkedDaily(draft) && !draft.savedAt
-          ? refreshDailyBrief(draft, data.saved, data.roster)
-          : draft;
-    if (!existing || JSON.stringify(prepared) !== JSON.stringify(existing))
-      setData((d) => ({ ...d, drafts: { ...d.drafts, [k]: prepared } }));
+            { date, excluded: excludedForms },
+          ),
+        )
+      )
+        return;
+    } catch (e) {
+      notify(e.message);
+      return;
+    }
+    setKind(k);
+    setErrors([]);
     setPage("form");
   }
   function startNew() {
+    openKind(kind, today(), {
+      ...entryProfile,
+      grade: entryProfile.grade || form.grade,
+    });
+  }
+  function resumeForm(item) {
+    if (readOnlyConnection || excludedForms.includes(item.id)) return;
+    const copy = structuredClone(item);
+    // Keep the saved report's exact contents until the supervisor edits it.
+    const prepared =
+      item.kind === "case" && !item.savedAt ? prepareCaseDraft(copy) : copy;
+    try {
+      if (!setData((d) => activateDraft(d, prepared))) return;
+    } catch (e) {
+      notify(e.message);
+      return;
+    }
+    setKind(item.kind);
+    setErrors([]);
+    setPage("form");
+  }
+  function removeDraft(item) {
     if (
-      !data.saved.some(
-        (s) => s.id === form.id && JSON.stringify(s) === JSON.stringify(form),
-      ) &&
       !confirm(
         t(
-          "بدء نموذج جديد؟ ستُحذف المسودة الحالية، وتبقى النسخ المحفوظة.",
-          "Start a new form? The current draft will be cleared. Saved copies remain.",
+          "حذف هذه المسودة؟ تبقى النسخة المحفوظة أو المرسلة إن وجدت.",
+          "Discard this draft? Any saved or submitted report will be kept.",
         ),
       )
     )
       return;
-    const fresh = newForm(
-      kind,
-      {
-        ...data.profile,
-        grade:
-          (isGeneral && authoringGrade) || form.grade || data.profile.grade,
-      },
-      data.roster,
-    );
-    setDraft(refreshDailyBrief(fresh, data.saved, data.roster));
-    setErrors([]);
+    setData((d) => discardDraft(d, item.id));
   }
   function check(target = form) {
     const e = validateForm(target);
@@ -533,15 +571,23 @@ function App() {
     if (isLinkedDaily(target) && target.supervisor !== form.supervisor)
       target = refreshDailyBrief(target, data.saved, data.roster);
     if (!check(target)) return;
-    const saved = { ...target, savedAt: new Date().toISOString() };
-    const persisted = setData((d) => ({
-      ...d,
-      saved: [saved, ...d.saved.filter((s) => s.id !== form.id)],
-      drafts: { ...d.drafts, [form.kind]: saved },
-    }));
+    let persisted;
+    try {
+      persisted = setData((d) => saveWorkspaceForm(d, target));
+    } catch (e) {
+      notify(e.message);
+      return;
+    }
     if (persisted) {
-      notify(t("تم الحفظ", "Saved"));
-      setPage("saved");
+      setErrors([]);
+      notify(
+        connected
+          ? t(
+              "تم الحفظ. يُرسل تلقائيًا عند توفر الاتصال، وتظهر هنا حالة الاستلام.",
+              "Saved. Delivery retries automatically when connected; receipt status appears here.",
+            )
+          : t("تم الحفظ على هذا الجهاز", "Saved on this device"),
+      );
     }
   }
   async function exportFile(type, target = form) {
@@ -641,7 +687,7 @@ function App() {
       if (
         isGeneral &&
         (v.profile.syncSupervisorId !== connected.supervisor.id ||
-          [...v.saved, ...Object.values(v.drafts)].some(
+          [...v.saved, ...Object.values(v.drafts), ...v.draftArchive].some(
             (f) =>
               f.syncSupervisorId !== connected.supervisor.id ||
               !grades.includes(f.grade),
@@ -659,19 +705,7 @@ function App() {
         return;
       const persisted = setData((d) =>
         withSupervisor(
-          {
-            ...d,
-            roster: d.roster || v.roster,
-            profile: {
-              ...d.profile,
-              grade: d.profile.grade || v.profile.grade || "",
-            },
-            saved: [
-              ...d.saved,
-              ...v.saved.filter((s) => !d.saved.some((a) => a.id === s.id)),
-            ],
-            drafts: { ...v.drafts, ...d.drafts },
-          },
+          mergeWorkspaceBackup(d, v),
           d.profile.supervisor || v.profile.supervisor,
         ),
       );
@@ -1130,39 +1164,25 @@ function App() {
                   </span>
                 </div>
               )}
-              <div className="form-cards">
-                <button
-                  className="form-card"
-                  onClick={() => openStudentHistory()}
-                >
-                  <div>
-                    <h2>{t("ملفات الطلبة", "Student files")}</h2>
-                  </div>
-                </button>
-                {[
-                  ["case", "تسجيل حالة", "Record a case"],
-                  ["daily", "الموجز اليومي", "Daily brief"],
-                  ["absence", "إحصائية الغياب اليومي", "Daily absence sheet"],
-                  ["late", "الطلبة المتأخرون", "Late students"],
-                  [
-                    "staffing",
-                    "سجل المعلمين والبدلاء",
-                    "Teachers & substitutes",
-                  ],
-                ]
-                  .filter(() => !readOnlyConnection)
-                  .map(([key, ar, english]) => (
-                    <button
-                      key={key}
-                      className="form-card"
-                      onClick={() => openKind(key)}
-                    >
-                      <div>
-                        <h2>{t(ar, english)}</h2>
-                      </div>
-                    </button>
-                  ))}
-              </div>
+              <FormLaunchers
+                store={data}
+                profile={entryProfile}
+                date={today()}
+                excluded={excludedForms}
+                t={t}
+                onOpen={openKind}
+                onStudents={() => openStudentHistory()}
+              />
+              <DraftList
+                drafts={pendingDrafts}
+                saved={data.saved}
+                t={t}
+                en={en}
+                onOpen={resumeForm}
+                onDiscard={removeDraft}
+                limit={3}
+                onMore={() => setPage("drafts")}
+              />
               {data.saved.length > 0 && (
                 <section className="recent">
                   <div className="section-heading">
@@ -1181,6 +1201,24 @@ function App() {
               )}
             </>
           )}
+        {page === "drafts" && !readOnlyConnection && (
+          <>
+            <h1>{t("المسودات", "Drafts")}</h1>
+            <DraftList
+              drafts={pendingDrafts}
+              saved={data.saved}
+              t={t}
+              en={en}
+              onOpen={resumeForm}
+              onDiscard={removeDraft}
+            />
+            {!pendingDrafts.length && (
+              <p className="empty">
+                {t("لا توجد مسودات غير مكتملة", "No unfinished drafts")}
+              </p>
+            )}
+          </>
+        )}
         {page === "form" && form && !readOnlyConnection && (
           <>
             {isGeneral && (
@@ -1209,11 +1247,25 @@ function App() {
                     ? t("تسجيل حالة", "Record a case")
                     : titles[kind][en ? 1 : 0]}
                 </h1>
-                <span className="small-status">
+                <span
+                  className={`small-status form-state form-state-${editorState}`}
+                  role="status"
+                >
                   {storageError
-                    ? t("غير محفوظ", "Not saved")
-                    : t("مسودة", "Draft")}
+                    ? t(
+                        "تعذّر حفظ آخر تعديل على الجهاز",
+                        "The latest edit could not be saved on this device",
+                      )
+                    : statusText(editorState, t)}
                 </span>
+                {["blocked", "withdrawn"].includes(editorState) && (
+                  <button
+                    className="text-control"
+                    onClick={() => setPage("settings")}
+                  >
+                    {t("مراجعة الإرسال", "Review delivery")}
+                  </button>
+                )}
                 {kind === "case" && caseReferenceLabel(form) && (
                   <p className="case-reference">
                     {t("رقم الحالة: ", "Case reference: ")}
@@ -1224,10 +1276,37 @@ function App() {
                   </p>
                 )}
               </div>
-              <button className="button" onClick={startNew}>
-                {t("جديد", "New")}
-              </button>
+              {!isDailyForm(kind) && (
+                <button className="button" onClick={startNew}>
+                  {kind === "case"
+                    ? t("حالة جديدة", "New case")
+                    : t("نموذج جديد", "New form")}
+                </button>
+              )}
             </div>
+            {form.date !== today() && (
+              <div className="form-date-notice" role="note">
+                <strong>
+                  {t(
+                    `هذا التقرير بتاريخ ${dateLabel(form.date)}، وليس بتاريخ اليوم.`,
+                    `This report is dated ${form.date}, not today.`,
+                  )}
+                </strong>
+                <button className="button" onClick={startNew}>
+                  {isDailyForm(kind)
+                    ? t("فتح تقرير اليوم", "Open today's report")
+                    : t("بدء نموذج لليوم", "Start a form for today")}
+                </button>
+              </div>
+            )}
+            {isDailyForm(kind) && (
+              <p className="hint">
+                {t(
+                  "اختيار تاريخ آخر يفتح تقرير ذلك اليوم، مع الاحتفاظ بعملك الحالي.",
+                  "Choosing another date opens that day's report and keeps your current work.",
+                )}
+              </p>
+            )}
             <OptionalPanel
               key={`school-details:${form.id}`}
               initialOpen={!form.supervisor}
@@ -1254,6 +1333,9 @@ function App() {
                 roster={data.roster}
                 lang={data.lang}
                 onChange={setDraft}
+                onDateChange={(date) =>
+                  openKind(kind, date, { ...entryProfile, grade: form.grade })
+                }
                 onSettings={() => setPage("settings")}
                 Field={Field}
               />
@@ -1273,6 +1355,9 @@ function App() {
                   roster={data.roster}
                   lang={data.lang}
                   onChange={setDraft}
+                  onDateChange={(date) =>
+                    openKind(kind, date, { ...entryProfile, grade: form.grade })
+                  }
                   Field={Field}
                 />
               </>
@@ -1481,16 +1566,27 @@ function App() {
                 exportFile(extension === "docx" ? "word" : extension)
               }
             />
+            <p className="hint export-submission-note">
+              {exportNotice ||
+                t(
+                  "تنزيل نسخة من التقرير لا يغيّر حالته.",
+                  "Downloading a copy does not change the report's status.",
+                )}
+            </p>
             {!readyFile && (
               <div className="action-bar">
                 <button
                   className="button primary"
-                  disabled={!!busy}
+                  disabled={!!busy || !delivery.ready || !canSave}
                   onClick={save}
                 >
-                  {kind === "case"
-                    ? t("حفظ الحالة", "Save record")
-                    : t("حفظ النموذج", "Save form")}
+                  {saveLabel}
+                </button>
+                <button
+                  className="button"
+                  onClick={() => setPage(isGeneral ? "create" : "home")}
+                >
+                  {t("العودة للنماذج", "Back to forms")}
                 </button>
               </div>
             )}
@@ -1518,6 +1614,9 @@ function App() {
               />
             </label>
             <div className="record-tools">
+              <button className="button" onClick={() => setPage("drafts")}>
+                {t("المسودات", "Drafts")} ({pendingDrafts.length})
+              </button>
               <label>
                 <input
                   type="checkbox"
@@ -1773,7 +1872,7 @@ function App() {
                       <button
                         className="button"
                         key={k}
-                        onClick={() => openKind(k)}
+                        onClick={() => resumeForm(data.drafts[k])}
                       >
                         {titles[k][en ? 1 : 0]}
                       </button>
@@ -1791,6 +1890,16 @@ function App() {
           onShare={share}
           onClose={() => setReadyFile(null)}
           onError={notify}
+          notice={page === "form" ? exportNotice : ""}
+          primaryAction={
+            page === "form" && !readOnlyConnection
+              ? {
+                  label: saveLabel,
+                  disabled: !!busy || !delivery.ready || !canSave,
+                  onClick: save,
+                }
+              : null
+          }
         />
       )}
       <datalist id="classes">
@@ -1829,22 +1938,8 @@ function App() {
           title={participants.length > 1 ? caseStudentNames(item) : undefined}
           disabled={!!receipt?.withdrawalRequestedAt}
           onClick={() => {
-            const existing = data.drafts[item.kind];
-            if (
-              existing &&
-              JSON.stringify(existing) !== JSON.stringify(item) &&
-              !confirm(
-                t(
-                  "فتح النسخة المحفوظة بدل المسودة الحالية؟",
-                  "Open the saved form instead of the current draft?",
-                ),
-              )
-            )
-              return;
-            const copy = structuredClone(item);
-            setDraft(item.kind === "case" ? prepareCaseDraft(copy) : copy);
-            setKind(item.kind);
-            setPage("form");
+            const correction = pendingDrafts.find((f) => f.id === item.id);
+            resumeForm(correction || item);
           }}
         >
           <div>

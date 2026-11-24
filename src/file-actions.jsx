@@ -2,7 +2,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { download } from "./exports.js";
 
 // Prepare first; open, download and share only from a fresh user tap.
-export function FileActions({ file, lang, onShare, onClose, onError }) {
+export function FileActions({
+  file,
+  lang,
+  onShare,
+  onClose,
+  onError,
+  notice = "",
+  primaryAction = null,
+}) {
   const [url, setUrl] = useState("");
   const downloadRef = useRef();
   const t = (ar, en) => (lang === "en" ? en : ar);
@@ -37,6 +45,20 @@ export function FileActions({ file, lang, onShare, onClose, onError }) {
           {t("إغلاق", "Close")}
         </button>
       </div>
+      {notice && (
+        <p className="file-submission-note" role="note">
+          {notice}
+        </p>
+      )}
+      {primaryAction && (
+        <button
+          className="button primary file-save"
+          disabled={primaryAction.disabled}
+          onClick={primaryAction.onClick}
+        >
+          {primaryAction.label}
+        </button>
+      )}
       <div className="file-ready-actions">
         <button
           ref={downloadRef}
