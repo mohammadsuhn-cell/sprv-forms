@@ -1229,7 +1229,7 @@ function App() {
               </button>
             </div>
             <OptionalPanel
-              key={form.id}
+              key={`school-details:${form.id}`}
               initialOpen={!form.supervisor}
               title={t("بيانات المدرسة", "School details")}
             >
