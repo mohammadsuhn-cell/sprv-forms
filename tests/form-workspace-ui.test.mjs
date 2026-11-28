@@ -32,9 +32,33 @@ async function componentModule(name) {
 const { FormLaunchers, DraftList, saveText, statusText } =
   await componentModule("form-workspace-ui.jsx");
 const { FileActions } = await componentModule("file-actions.jsx");
+const { SnapshotStatus } = await componentModule("snapshot-status.jsx");
 const t = (ar, en) => en;
 const render = (Component, props) =>
   renderToStaticMarkup(React.createElement(Component, props));
+test("history freshness distinguishes a verified copy, offline data and a failed check", () => {
+  const props = {
+    lang: "en",
+    t,
+    bundle: { payload: { capturedAt: "2026-11-27T10:00:00Z" } },
+    checkedAt: "2026-11-28T10:00:00Z",
+  };
+  const fresh = render(SnapshotStatus, props);
+  assert(fresh.includes("Checked with receiver"));
+  assert(fresh.includes("Last successful check"));
+  assert(fresh.includes("Saved data as of"));
+  const offline = render(SnapshotStatus, { ...props, offline: true });
+  assert(offline.includes("Offline"));
+  assert(!offline.includes("Checked with receiver"));
+  const failed = render(SnapshotStatus, {
+    ...props,
+    error: Error("Unreachable"),
+  });
+  assert(failed.includes("Could not check for updates"));
+  assert(!failed.includes("Checked with receiver"));
+  const restored = render(SnapshotStatus, { ...props, checkedAt: "" });
+  assert(restored.includes("Awaiting update check"));
+});
 function workspace() {
   const store = emptyStore();
   store.profile = {

@@ -2,6 +2,7 @@
 // The private signing key is non-exportable and never placed in localStorage or an activation URL.
 import { storageKey, validateStore } from "./model.js";
 import { authoringKey } from "./authoring.js";
+import { notifySnapshotChange } from "./snapshot-events.js";
 import { submissionForm, validCaseReference } from "./case-reference.js";
 import {
   snapshotOwner,
@@ -529,6 +530,7 @@ async function deliverOnce() {
         if (current.backup && !current.job) delete current.backup.contents;
         await request(s.put(current));
       });
+      if (!sent.backup) notifySnapshotChange("received", connection);
     } catch (error) {
       await transaction("records", "readwrite", async (s) => {
         const current = await request(s.get(row.id));
@@ -660,7 +662,11 @@ const assertSnapshotConnection = (current, expected) => {
     throw Object.assign(Error("Connection changed"), { code: "unpaired" });
 };
 export const readSchoolSnapshotPage = (params = {}) =>
-  signedRead("school-snapshot", { ...params, studentFileVersion: 2 });
+  signedRead("school-snapshot", {
+    ...params,
+    studentFileVersion: 2,
+    snapshotSyncVersion: 1,
+  });
 export async function readSavedSchoolSnapshot(expected) {
   return transaction("settings", "readonly", async (store) => {
     const current = await request(store.get("connection"));
@@ -678,7 +684,7 @@ export async function saveSchoolSnapshot(
   expected,
   fromReceiver = false,
 ) {
-  return transaction("settings", "readwrite", async (store) => {
+  await transaction("settings", "readwrite", async (store) => {
     const current = await request(store.get("connection"));
     assertSnapshotConnection(current, expected);
     if (
@@ -707,12 +713,14 @@ export async function saveSchoolSnapshot(
     if (fromReceiver)
       await request(store.delete(`snapshot-blocked:${current.deviceId}`));
   });
+  notifySnapshotChange("saved", expected);
 }
 export async function blockSchoolSnapshot(expected) {
-  return transaction("settings", "readwrite", async (store) => {
+  await transaction("settings", "readwrite", async (store) => {
     const current = await request(store.get("connection"));
     assertSnapshotConnection(current, expected);
     await request(store.put(true, `snapshot-blocked:${current.deviceId}`));
     await request(store.delete(`school-snapshot:${snapshotAccount(current)}`));
   });
+  notifySnapshotChange("saved", expected);
 }

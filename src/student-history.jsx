@@ -13,6 +13,7 @@ import {
 import "./student-history.css";
 import { ReviewPanel, useReviews } from "./review-ui.jsx";
 import { loadStudentReviews } from "./review-delivery.js";
+import { readHistoryWindow } from "./history-window.js";
 
 export function readError(error, t) {
   if (error.code === "pagination_expired")
@@ -74,7 +75,14 @@ export function readError(error, t) {
 // Ignore responses from earlier searches, students, filters, or unmounted pages.
 function useHistoryPage(action, params, listKey) {
   const { student: readStudentData } = useReads();
-  const [state, setState] = useState({ data: null, busy: true, error: null });
+  const [state, setState] = useState({
+    key: "",
+    data: null,
+    busy: true,
+    error: null,
+  });
+  const latest = useRef(state);
+  latest.current = state;
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const pending = useRef(false);
@@ -82,16 +90,34 @@ function useHistoryPage(action, params, listKey) {
   useEffect(() => {
     const version = ++generation.current;
     pending.current = true;
-    setState({ data: null, busy: true, error: null });
+    const previous = latest.current.key === key ? latest.current.data : null;
+    setState({ key, data: previous, busy: true, error: null });
     const timer = setTimeout(
       async () => {
         try {
-          const data = await readStudentData(action, JSON.parse(key));
+          const data = await readHistoryWindow(
+            readStudentData,
+            action,
+            JSON.parse(key),
+            listKey,
+            previous?.[listKey]?.length || 0,
+            () => generation.current === version,
+          );
           if (generation.current === version)
-            setState({ data, busy: false, error: null });
+            setState({ key, data, busy: false, error: null });
         } catch (error) {
           if (generation.current === version)
-            setState({ data: null, busy: false, error });
+            setState({
+              key,
+              data:
+                [401, 403, 404].includes(error.status) ||
+                error.code === "unpaired"
+                  ? null
+                  : previous,
+              busy: false,
+              error,
+              errorAction: "reload",
+            });
         } finally {
           if (generation.current === version) pending.current = false;
         }
@@ -116,6 +142,7 @@ function useHistoryPage(action, params, listKey) {
       });
       if (generation.current === version)
         setState((s) => ({
+          key,
           busy: false,
           error: null,
           data: {
@@ -132,12 +159,21 @@ function useHistoryPage(action, params, listKey) {
         }));
     } catch (error) {
       if (generation.current === version)
-        setState((s) => ({ ...s, busy: false, error }));
+        setState((s) => ({ ...s, busy: false, error, errorAction: "more" }));
     } finally {
       if (generation.current === version) pending.current = false;
     }
   }
-  return { ...state, more, reload: () => setRefresh((n) => n + 1) };
+  const reload = () => setRefresh((n) => n + 1);
+  return {
+    ...state,
+    more,
+    reload,
+    retry:
+      state.errorAction === "more" && state.error?.code !== "pagination_expired"
+        ? more
+        : reload,
+  };
 }
 
 function PageStatus({ page, t }) {
@@ -149,15 +185,7 @@ function PageStatus({ page, t }) {
       {page.error && (
         <div className="alert" role="alert">
           <p>{readError(page.error, t)}</p>
-          <button
-            className="button"
-            disabled={page.busy}
-            onClick={
-              page.data && page.error.code !== "pagination_expired"
-                ? page.more
-                : page.reload
-            }
-          >
+          <button className="button" disabled={page.busy} onClick={page.retry}>
             {page.error.code === "pagination_expired"
               ? t("تحديث", "Refresh")
               : t("إعادة المحاولة", "Retry")}
@@ -308,12 +336,24 @@ function HistoryExports({ studentId, record, lang, t, children }) {
   const [error, setError] = useState(null);
   const generation = useRef(0);
   const pending = useRef(false);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const outdated = pending.current || file;
+    generation.current++;
+    pending.current = false;
+    setFile(null);
+    setError(
+      outdated
+        ? t(
+            "تحدثت البيانات؛ أعد تجهيز الملف للحصول على أحدث نسخة.",
+            "Data updated; prepare the file again for the latest copy.",
+          )
+        : null,
+    );
+    setBusy(false);
+    return () => {
       generation.current++;
-    },
-    [],
-  );
+    };
+  }, [readStudentData, studentId, record?.revision]);
   async function prepare(extension) {
     if (pending.current) return;
     pending.current = true;
@@ -446,17 +486,24 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const mounted = useRef(true);
+  const generation = useRef(0);
+  const open = useRef(false);
   const pending = useRef(false);
   useEffect(() => {
-    mounted.current = true;
+    generation.current++;
+    pending.current = false;
+    setDetail(null);
+    setError(null);
+    setBusy(false);
+    if (open.current) void load();
     return () => {
-      mounted.current = false;
+      generation.current++;
     };
-  }, []);
+  }, [readStudentData, studentId, record.id, record.revision]);
   async function load() {
     if (pending.current) return;
     pending.current = true;
+    const version = ++generation.current;
     setBusy(true);
     setError(null);
     try {
@@ -464,18 +511,21 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
         studentId,
         recordId: record.id,
       });
-      if (mounted.current) setDetail(data);
+      if (generation.current === version) setDetail(data);
     } catch (e) {
-      if (mounted.current) setError(e);
+      if (generation.current === version) setError(e);
     } finally {
-      pending.current = false;
-      if (mounted.current) setBusy(false);
+      if (generation.current === version) {
+        pending.current = false;
+        setBusy(false);
+      }
     }
   }
   return (
     <details
       className="history-entry"
       onToggle={(e) => {
+        open.current = e.currentTarget.open;
         if (e.currentTarget.open && !detail && !error) load();
       }}
     >
@@ -490,7 +540,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
                   ? t("سجل حالات", "Case register")
                   : record.type || t("حالة", "Case")}
           </strong>{" "}
-          · {formatDate(record.date)}
+          · {formatDate(detail?.date || record.date)}
         </span>
         <small>
           {record.supervisorName}
@@ -505,6 +555,14 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
       {busy && (
         <p role="status">{t("جارٍ تحميل التفاصيل…", "Loading details…")}</p>
       )}
+      {detail && detail.revision !== record.revision && (
+        <p role="status">
+          {t(
+            "تم تحديث التقرير؛ ستتحدث القائمة عند المزامنة.",
+            "Report updated; the list will refresh with synchronization.",
+          )}
+        </p>
+      )}
       {error && (
         <div role="alert">
           <p>{readError(error, t)}</p>
@@ -517,7 +575,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
         <ReportContent report={detail.report} />
       )}
       {detail && ["case", "cases"].includes(record.kind) && (
-        <HistoryExports studentId={studentId} record={record} lang={lang} t={t}>
+        <HistoryExports studentId={studentId} record={detail} lang={lang} t={t}>
           <ReportContent report={detail.report} />
         </HistoryExports>
       )}
@@ -543,12 +601,25 @@ function HistoryBundleExport({ studentId, lang, t }) {
   const [error, setError] = useState(null);
   const generation = useRef(0);
   const pending = useRef(false);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const outdated = pending.current || file;
+    generation.current++;
+    pending.current = false;
+    setFile(null);
+    setError(
+      outdated
+        ? t(
+            "تحدثت البيانات؛ أعد تجهيز الملف للحصول على أحدث نسخة.",
+            "Data updated; prepare the file again for the latest copy.",
+          )
+        : null,
+    );
+    setProgress("");
+    setBusy(false);
+    return () => {
       generation.current++;
-    },
-    [],
-  );
+    };
+  }, [readStudentData, studentId]);
 
   async function prepare() {
     if (pending.current) return;
@@ -746,7 +817,10 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                 </p>
               )}
               <p className="hint">
-                {t("آخر تحديث", "Last refreshed")}:{" "}
+                {local
+                  ? t("بيانات النسخة المحفوظة حتى", "Saved data as of")
+                  : t("آخر قراءة", "Last read")}
+                :{" "}
                 {new Date(data.fetchedAt).toLocaleString(
                   lang === "en" ? "en-GB" : "ar-KW",
                   { timeZone: "Asia/Kuwait" },
@@ -790,7 +864,7 @@ export function StudentProfile({ studentId, lang, t, onBack, backLabel }) {
                 )}
                 {data.records.map((record) => (
                   <HistoryEntry
-                    key={record.id + ":" + record.revision}
+                    key={record.id}
                     record={record}
                     studentId={data.student.id}
                     t={t}

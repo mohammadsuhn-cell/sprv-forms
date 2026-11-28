@@ -56,6 +56,7 @@ export function snapshotHeader(value) {
     school: value.school,
     year: value.year,
     capturedAt: value.capturedAt,
+    ...(value.contentVersion !== undefined ? { contentVersion: value.contentVersion } : {}),
     ...(value.studentFileVersion === 2 ? { studentFileVersion: 2 } : {}),
     ...(value.scope !== undefined ? { scope: value.scope } : {}),
   };
@@ -131,6 +132,7 @@ export function validateSchoolSnapshot(value, connection) {
   const scope = snapshotScope(connection);
   requireValue(value && value.format === snapshotFormat && value.version === 1);
   requireValue(value.studentFileVersion === undefined || value.studentFileVersion === 2);
+  requireValue(value.contentVersion === undefined || /^[a-f0-9]{64}$/.test(value.contentVersion));
   if (`${value.serverId}:${value.supervisorId}` !== owner) throw error('snapshot_owner');
   const declared = value.scope;
   // Existing general-supervisor backups have no explicit scope and remain valid.
@@ -241,14 +243,16 @@ export function validateSchoolSnapshot(value, connection) {
 }
 
 // A local reader exposes the same response shapes used by the live workspace.
-// Its records are immutable for the lifetime of this reader; updating remounts it.
+// Its records are immutable for the lifetime of this reader. Updates replace the
+// reader while keeping the workspace's navigation mounted.
 export function createSnapshotReader(snapshot, clock = () => new Date()) {
   const { students, records } = snapshot;
   const scopeGrade = snapshot.scope?.grade || '';
   const pages = new Map();
   const overviews = new Map();
   let sequence = 0;
-  const handle = () => String(++sequence).padStart(32, '0');
+  const prefix = crypto.randomUUID().replaceAll('-', '').slice(0, 24);
+  const handle = () => prefix + String(++sequence).padStart(8, '0');
   const fail = (code, status = 400) => {
     throw Object.assign(error(code), { status });
   };

@@ -15,6 +15,7 @@ import { ExportPanels } from "./export-panels.jsx";
 import { historyFileName } from "./history-export.js";
 import "./general-workspace.css";
 import { useWorkspaceNavigation } from "./workspace-navigation.js";
+import { readHistoryWindow } from "./history-window.js";
 
 const periods = [
   ["today", "اليوم", "Today"],
@@ -55,6 +56,7 @@ function useGeneralPage(action, params, enabled = true) {
   const { general: readGeneralData } = useReads();
   const key = JSON.stringify(params),
     [refresh, setRefresh] = useState(0);
+  const queryKey = JSON.stringify({ ...params, snapshotId: undefined });
   const [state, setState] = useState({
     key: "",
     data: null,
@@ -63,6 +65,8 @@ function useGeneralPage(action, params, enabled = true) {
   });
   const generation = useRef(0),
     pending = useRef(false);
+  const latest = useRef(state);
+  latest.current = state;
   useEffect(() => {
     const version = ++generation.current;
     if (!enabled) {
@@ -70,16 +74,28 @@ function useGeneralPage(action, params, enabled = true) {
       return;
     }
     pending.current = true;
+    const previous =
+      latest.current.key === queryKey ? latest.current.data : null;
     setState((old) => ({
-      key,
-      data: old.key === key ? old.data : null,
+      key: queryKey,
+      data: previous,
       busy: true,
       error: null,
     }));
-    readGeneralData(action, JSON.parse(key))
+    const request = ["overview-details", "received-reports"].includes(action)
+      ? readHistoryWindow(
+          readGeneralData,
+          action,
+          JSON.parse(key),
+          "items",
+          previous?.items?.length || 0,
+          () => generation.current === version,
+        )
+      : readGeneralData(action, JSON.parse(key));
+    request
       .then((data) => {
         if (version === generation.current)
-          setState({ key, data, busy: false, error: null });
+          setState({ key: queryKey, data, busy: false, error: null });
       })
       .catch((error) => {
         if (version === generation.current)
@@ -88,6 +104,7 @@ function useGeneralPage(action, params, enabled = true) {
             data:
               error.status === 401 ||
               error.status === 403 ||
+              error.status === 404 ||
               error.code === "unpaired"
                 ? null
                 : old.data,
@@ -114,7 +131,7 @@ function useGeneralPage(action, params, enabled = true) {
       });
       if (version === generation.current)
         setState((old) => ({
-          key,
+          key: queryKey,
           error: null,
           busy: false,
           data: { ...data, items: [...old.data.items, ...data.items] },
@@ -400,12 +417,24 @@ export function ReceivedExports({ detail, lang, t, children }) {
     [error, setError] = useState("");
   const generation = useRef(0),
     pending = useRef(false);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const outdated = pending.current || file;
+    generation.current++;
+    pending.current = false;
+    setFile(null);
+    setError(
+      outdated
+        ? t(
+            "تحدثت البيانات؛ أعد تجهيز الملف للحصول على أحدث نسخة.",
+            "Data updated; prepare the file again for the latest copy.",
+          )
+        : "",
+    );
+    setBusy(false);
+    return () => {
       generation.current++;
-    },
-    [],
-  );
+    };
+  }, [detail, dataAsOf]);
   async function prepare(extension) {
     if (pending.current) return;
     const version = ++generation.current;
@@ -1028,7 +1057,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
             {view && (
               <>
                 <Drilldown
-                  key={snapshot.snapshotId + view}
+                  key={view}
                   view={view}
                   snapshot={snapshot}
                   lang={lang}
@@ -1044,7 +1073,7 @@ function GeneralWorkspaceView({ connection, lang, t, active }) {
         {visited.reports && snapshot && (
           <div hidden={tab !== "reports"}>
             <Drilldown
-              key={snapshot.snapshotId}
+              key="reports"
               view="reports"
               snapshot={snapshot}
               filters={filters}

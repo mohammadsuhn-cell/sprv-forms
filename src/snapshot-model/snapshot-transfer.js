@@ -26,6 +26,11 @@ export async function validateSnapshotBundle(bundle, connection) {
     throw invalid();
   if ((await digest(bundle.payload)) !== bundle.digest) throw invalid();
   validateSchoolSnapshot(bundle.payload, connection);
+  if (bundle.payload.contentVersion) {
+    const { contentVersion, ...content } = bundle.payload;
+    if ((await digest({ ...content, snapshotId: '', capturedAt: '' })) !== contentVersion)
+      throw invalid();
+  }
   return bundle;
 }
 export async function downloadSchoolSnapshot(
@@ -33,6 +38,7 @@ export async function downloadSchoolSnapshot(
   connection,
   onProgress = () => {},
   active = () => true,
+  contentVersion,
 ) {
   let first,
     page,
@@ -44,8 +50,25 @@ export async function downloadSchoolSnapshot(
     records = [],
     seen = new Set();
   do {
-    page = await read(first ? { snapshotId: first.snapshotId, cursor } : {});
+    page = await read(
+      first
+        ? { snapshotId: first.snapshotId, cursor }
+        : contentVersion
+          ? { ifContentVersion: contentVersion }
+          : {},
+    );
     if (!active()) throw new DOMException('Cancelled', 'AbortError');
+    if (!first && page?.notModified === true) {
+      if (
+        !contentVersion ||
+        page.contentVersion !== contentVersion ||
+        !/^[a-f0-9]{64}$/.test(contentVersion) ||
+        typeof page.checkedAt !== 'string' ||
+        !Number.isFinite(Date.parse(page.checkedAt))
+      )
+        throw invalid();
+      return { notModified: true, contentVersion, checkedAt: page.checkedAt };
+    }
     if (
       !page ||
       !Array.isArray(page.items) ||

@@ -1,20 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ReadContext, useReads } from "./read-context.jsx";
-import {
-  readSchoolSnapshotPage,
-  readSavedSchoolSnapshot,
-  saveSchoolSnapshot,
-  blockSchoolSnapshot,
-} from "./delivery.js";
+import { useSchoolSnapshot } from "./school-snapshot-provider.jsx";
 import {
   createSnapshotReader,
-  downloadSchoolSnapshot,
   parseSnapshotBackup,
   snapshotBackupText,
   snapshotMaxBytes,
-  validateSnapshotBundle,
 } from "./school-snapshot.js";
 import { FileActions } from "./file-actions.jsx";
+import { SnapshotStatus } from "./snapshot-status.jsx";
 
 const formatTime = (time, lang) =>
   new Date(time).toLocaleString(lang === "en" ? "en-GB" : "ar-KW", {
@@ -92,15 +86,23 @@ export function SchoolSnapshotWorkspace({
   const restoreLabel = gradeSnapshot
     ? t("استعادة نسخة سجل الصف", "Restore grade history backup")
     : t("استعادة نسخة احتياطية", "Restore backup");
-  const [bundle, setBundle] = useState(null),
-    [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false),
-    [progress, setProgress] = useState(null),
-    [error, setError] = useState(null);
+  const {
+    bundle,
+    ready,
+    busy: syncing,
+    progress,
+    error: syncError,
+    blocked,
+    offline,
+    checkedAt,
+    sync,
+  } = useSchoolSnapshot();
+  const [workingLocally, setWorkingLocally] = useState(false),
+    [localError, setError] = useState(null);
+  const busy = syncing || workingLocally;
+  const error = localError || syncError;
   const [pendingRestore, setPendingRestore] = useState(null),
-    [file, setFile] = useState(null),
-    [blocked, setBlocked] = useState(false);
-  const [offline, setOffline] = useState(!navigator.onLine);
+    [file, setFile] = useState(null);
   const generation = useRef(0),
     working = useRef(false);
   const identity = JSON.stringify([
@@ -112,32 +114,12 @@ export function SchoolSnapshotWorkspace({
     connection.supervisor.grade,
   ]);
   useEffect(() => {
-    const version = ++generation.current;
-    setReady(false);
-    setBundle(null);
+    ++generation.current;
     setError(null);
-    setBlocked(false);
-    readSavedSchoolSnapshot(connection)
-      .then(async (saved) => {
-        if (saved) await validateSnapshotBundle(saved, connection);
-        if (version === generation.current) setBundle(saved || null);
-      })
-      .catch((e) => {
-        if (version === generation.current) {
-          setError(e);
-          setBlocked(e.code === "revoked");
-        }
-      })
-      .finally(() => {
-        if (version === generation.current) setReady(true);
-      });
-    const network = () => setOffline(!navigator.onLine);
-    window.addEventListener("online", network);
-    window.addEventListener("offline", network);
+    setPendingRestore(null);
+    setFile(null);
     return () => {
       generation.current++;
-      window.removeEventListener("online", network);
-      window.removeEventListener("offline", network);
     };
   }, [identity]);
   const reader = useMemo(
@@ -151,51 +133,29 @@ export function SchoolSnapshotWorkspace({
     [bundle, live],
   );
   async function run(operation) {
-    if (working.current || !ready) return;
+    if (working.current || busy || !ready) return;
     working.current = true;
     const version = generation.current,
       active = () => version === generation.current;
-    setBusy(true);
+    setWorkingLocally(true);
     setError(null);
     setFile(null);
     try {
       await operation(active);
     } catch (e) {
       if (!active()) return;
-      if (e.code === "revoked" || e.code === "scope") {
-        setBundle(null);
-        setBlocked(true);
-        setPendingRestore(null);
-        await blockSchoolSnapshot(connection).catch(() => {});
-      }
       if (active() && e.name !== "AbortError") setError(e);
     } finally {
       working.current = false;
       if (active()) {
-        setBusy(false);
-        setProgress(null);
+        setWorkingLocally(false);
       }
     }
   }
   function update() {
     setPendingRestore(null);
-    return run(async (active) => {
-      const next = await downloadSchoolSnapshot(
-        readSchoolSnapshotPage,
-        connection,
-        (p) => {
-          if (active()) setProgress(p);
-        },
-        active,
-      );
-      if (!active()) return;
-      await saveSchoolSnapshot(next, connection, true);
-      if (active()) {
-        setBundle(next);
-        setBlocked(false);
-      }
-      navigator.storage?.persist?.().catch(() => {});
-    });
+    setError(null);
+    return sync.refresh();
   }
   function inspectBackup(selected) {
     if (!selected) return;
@@ -209,9 +169,9 @@ export function SchoolSnapshotWorkspace({
   }
   function restore() {
     return run(async (active) => {
-      await saveSchoolSnapshot(pendingRestore, connection);
+      await sync.restore(pendingRestore);
+      if (sync.getState().error) throw sync.getState().error;
       if (active()) {
-        setBundle(pendingRestore);
         setPendingRestore(null);
       }
     });
@@ -241,30 +201,16 @@ export function SchoolSnapshotWorkspace({
         >
           {active && !showSettings ? (
             <div className="snapshot-status-bar">
-              <div>
-                <strong>
-                  {bundle
-                    ? t("آخر تحديث", "Last updated")
-                    : gradeSnapshot
-                      ? t("سجل الصف", "Grade history")
-                      : t("بيانات المدرسة", "School data")}
-                </strong>
-                <span>
-                  {bundle
-                    ? formatTime(bundle.payload.capturedAt, lang)
-                    : t("عرض مباشر", "Live view")}
-                  {offline ? ` · ${t("دون اتصال", "Offline")}` : ""}
-                </span>
-              </div>
+              <SnapshotStatus
+                {...{ bundle, busy, offline, error, checkedAt, lang, t }}
+              />
               <button
                 className="primary"
                 disabled={!ready || busy}
                 onClick={update}
                 aria-label={updateLabel}
               >
-                {bundle
-                  ? t("تحديث النسخة", "Update copy")
-                  : t("حفظ دون اتصال", "Save offline")}
+                {t("تحديث الآن", "Update now")}
               </button>
             </div>
           ) : (
@@ -294,23 +240,30 @@ export function SchoolSnapshotWorkspace({
                     </>
                   ) : (
                     t(
-                      gradeSnapshot
-                        ? "حدّث سجل الصف أثناء اتصال جهاز الاستقبال، ثم تصفح سجل الطلبة وصدّره دون اتصال."
-                        : "حدّث بيانات المدرسة أثناء اتصال جهاز الاستقبال، ثم تصفح السجلات والتقارير وصدّرها دون اتصال.",
-                      "Update while the receiver is online, then browse and export the saved records offline.",
+                      "تُحفظ أحدث البيانات تلقائيًا عند توفر الاتصال بجهاز الاستقبال، لتصفحها وتصديرها دون اتصال.",
+                      "The latest data is saved automatically when the receiver is reachable, for browsing and export offline.",
                     )
                   )}
                 </p>
                 {bundle && (
                   <p className="hint">
                     {t(
-                      gradeSnapshot
-                        ? "تعرض السجلات النسخة المحفوظة. تحديث سجل الصف يجلب التقارير والتعديلات الجديدة."
-                        : "تعرض الصفحات النسخة المحفوظة. تحديث بيانات المدرسة يجلب جميع التقارير والتعديلات الجديدة.",
-                      "Pages use your saved copy. Update to receive new reports and corrections.",
+                      "تُحدّث التقارير والتعديلات تلقائيًا أثناء فتح التطبيق. إذا انقطع الاتصال تبقى آخر نسخة مكتملة متاحة.",
+                      "Reports and corrections update automatically while the app is open. If the connection fails, the last complete copy stays available.",
                     )}
                   </p>
                 )}
+                <SnapshotStatus
+                  {...{
+                    bundle: null,
+                    busy,
+                    offline,
+                    error,
+                    checkedAt,
+                    lang,
+                    t,
+                  }}
+                />
               </div>
               <div className="history-actions">
                 <button
@@ -415,10 +368,7 @@ export function SchoolSnapshotWorkspace({
         </section>
       )}
       {ready && !blocked && (
-        <ReadContext.Provider
-          key={bundle?.payload.snapshotId || "live"}
-          value={reader}
-        >
+        <ReadContext.Provider value={reader}>
           <div hidden={!active}>{children}</div>
         </ReadContext.Provider>
       )}

@@ -72,6 +72,7 @@ import { GeneralWorkspace } from "./general-workspace.jsx";
 import { ReviewProvider, ReviewBadge, ReviewPanel } from "./review-ui.jsx";
 import { OwnedReports } from "./owned-reports.jsx";
 import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
+import { SchoolSnapshotProvider } from "./school-snapshot-provider.jsx";
 import {
   caseReference,
   caseReferenceLabel,
@@ -166,7 +167,9 @@ function OptionalPanel({ title, initialOpen = false, children }) {
 function WorkspaceProviders({ connection, exportedBy, children }) {
   return (
     <ExporterContext.Provider value={exportedBy}>
-      <ReviewProvider connection={connection}>{children}</ReviewProvider>
+      <SchoolSnapshotProvider connection={connection}>
+        <ReviewProvider connection={connection}>{children}</ReviewProvider>
+      </SchoolSnapshotProvider>
     </ExporterContext.Provider>
   );
 }
