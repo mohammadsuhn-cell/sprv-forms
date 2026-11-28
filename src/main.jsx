@@ -6,6 +6,8 @@ import {
 import { actionText, prepareCaseDraft } from "./case-options.js";
 import { CaseEditor } from "./case-editor.jsx";
 import { useWorkspaceLock } from "./workspace-lock.jsx";
+import { ExporterContext } from "./read-context.jsx";
+import { createExportContext } from "./export-stamp.js";
 import {
   activateDraft,
   discardDraft,
@@ -158,6 +160,14 @@ function OptionalPanel({ title, initialOpen = false, children }) {
       <summary>{title}</summary>
       {children}
     </details>
+  );
+}
+
+function WorkspaceProviders({ connection, exportedBy, children }) {
+  return (
+    <ExporterContext.Provider value={exportedBy}>
+      <ReviewProvider connection={connection}>{children}</ReviewProvider>
+    </ExporterContext.Provider>
   );
 }
 
@@ -597,14 +607,19 @@ function App() {
     setMessage("");
     setBusy(type);
     setReadyFile(null);
+    const context = createExportContext(
+      data.profile.supervisor.trim() ||
+        connected?.supervisor.name ||
+        target.supervisor,
+    );
     try {
       const lib = await import("./exports.js");
       const blob =
         type === "pdf"
-          ? await lib.pdfBlob(target)
+          ? await lib.pdfBlob(target, context)
           : type === "xlsx"
-            ? await lib.excelBlob(target)
-            : await lib.wordBlob(target);
+            ? await lib.excelBlob(target, context)
+            : await lib.wordBlob(target, context);
       const name = fileName(target, type === "word" ? "docx" : type);
       if (revision !== exportRevision.current) return;
       setReadyFile({ blob, name });
@@ -948,7 +963,12 @@ function App() {
       </main>
     );
   return (
-    <ReviewProvider connection={connected}>
+    <WorkspaceProviders
+      connection={connected}
+      exportedBy={
+        data.profile.supervisor.trim() || connected?.supervisor.name || ""
+      }
+    >
       <header className="topbar">
         <div className="brand">
           <div>
@@ -1919,7 +1939,7 @@ function App() {
           {t("جارٍ تجهيز الملف…", "Preparing document…")}
         </div>
       )}
-    </ReviewProvider>
+    </WorkspaceProviders>
   );
   function SavedRow({ item, remove = false }) {
     const receipt = delivery.records.find((r) => r.formId === item.id);

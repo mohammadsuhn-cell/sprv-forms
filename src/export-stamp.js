@@ -22,6 +22,58 @@ export function exportStamp(supervisor, now = new Date()) {
   return { name, generated, text: `${name} | ${generated}` };
 }
 
+// One context per download, reused for every document in a student ZIP.
+// This metadata belongs to the exported copy, never to the saved submission.
+export function createExportContext(exportedBy, now = new Date()) {
+  return Object.freeze({
+    exportedBy: String(exportedBy || "")
+      .replace(/\s+/gu, " ")
+      .trim(),
+    exportedAt: new Date(now).toISOString(),
+  });
+}
+
+export function prepareExportReport(source, context = {}) {
+  const { exportedBy, exportedAt } = createExportContext(
+    context.exportedBy || source.supervisor,
+    context.exportedAt || new Date(),
+  );
+  const stamp = exportStamp(exportedBy, new Date(exportedAt));
+  stamp.name = `أصدر النسخة: ${exportedBy || "غير محدد"}`;
+  stamp.text = `${stamp.name} | ${stamp.generated}`;
+  const summary = source.kind === "student-profile";
+  const exportMeta = [];
+  if (
+    Number.isSafeInteger(context.sourceRevision) &&
+    context.sourceRevision > 0
+  )
+    exportMeta.push([
+      "نسخة التقرير",
+      String(context.sourceRevision).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]),
+    ]);
+  const dataAsOf = context.dataAsOf || source.dataAsOf;
+  if (dataAsOf && Number.isFinite(new Date(dataAsOf).valueOf()))
+    exportMeta.push([
+      "آخر تحديث للبيانات",
+      exportStamp("", new Date(dataAsOf)).generated.replace(
+        "تاريخ التصدير: ",
+        "",
+      ),
+    ]);
+  return {
+    ...source,
+    // A newly prepared summary belongs to its reader; individual reports keep
+    // their historical author, including in signatures and document metadata.
+    supervisor: summary ? exportedBy : source.supervisor,
+    authorLabel: summary ? "أعدّ الملخص" : "معدّ التقرير",
+    meta: [...source.meta, ...exportMeta],
+    exportMeta,
+    exportedBy,
+    exportedAt,
+    exportStamp: stamp,
+  };
+}
+
 export function canvasExportFooter(stamp, width, margin) {
   const ctx = document.createElement("canvas").getContext("2d");
   const font = '400 11px "Noto Sans Arabic", Arial, sans-serif';

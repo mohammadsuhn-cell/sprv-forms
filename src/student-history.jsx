@@ -1,6 +1,7 @@
 import { shortCaseReference } from "./case-reference.js";
 import React, { useEffect, useRef, useState } from "react";
-import { useReads } from "./read-context.jsx";
+import { useReads, useExporter } from "./read-context.jsx";
+import { createExportContext } from "./export-stamp.js";
 import { dateLabel } from "./model.js";
 import { ExportPanels } from "./export-panels.jsx";
 import { FileActions } from "./file-actions.jsx";
@@ -299,8 +300,9 @@ export function ReportContent({ report, students = [], onStudent }) {
 }
 
 function HistoryExports({ studentId, record, lang, t, children }) {
+  const exporter = useExporter();
   const reviews = useReviews();
-  const { student: readStudentData } = useReads();
+  const { student: readStudentData, dataAsOf } = useReads();
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState(null);
   const [error, setError] = useState(null);
@@ -320,6 +322,7 @@ function HistoryExports({ studentId, record, lang, t, children }) {
     setBusy(true);
     setFile(null);
     setError(null);
+    const context = { ...createExportContext(exporter), dataAsOf };
     try {
       const lib = await import("./exports.js");
       let blob, name;
@@ -348,9 +351,15 @@ function HistoryExports({ studentId, record, lang, t, children }) {
             : extension === "docx"
               ? lib.wordBlob
               : lib.excelBlob
-        )(detail.form);
+        )(detail.form, { ...context, sourceRevision: detail.revision });
         name = historyFileName(
-          `${detail.report.title}-${detail.reference || detail.date}`,
+          [
+            detail.report.title,
+            detail.date,
+            shortCaseReference(detail.reference),
+          ]
+            .filter(Boolean)
+            .join("-"),
           extension,
         );
       } else {
@@ -367,13 +376,12 @@ function HistoryExports({ studentId, record, lang, t, children }) {
           );
         if (!active()) return;
         const report = profileReport(history);
-        blob = await (
-          extension === "pdf"
-            ? lib.pdfReportBlob
-            : extension === "docx"
-              ? lib.wordReportBlob
-              : lib.excelReportBlob
-        )(report);
+        blob =
+          extension === "xlsx"
+            ? await lib.excelReportBlob(report, null, context)
+            : await (
+                extension === "pdf" ? lib.pdfReportBlob : lib.wordReportBlob
+              )(report, context);
         name = historyFileName(`سجل الطالب-${history.student.name}`, extension);
       }
       if (active()) setFile({ blob, name });
@@ -526,6 +534,7 @@ function HistoryEntry({ record, studentId, t, formatDate, lang }) {
 }
 
 function HistoryBundleExport({ studentId, lang, t }) {
+  const exporter = useExporter();
   const { student: readStudentData } = useReads();
   const reviews = useReviews();
   const [busy, setBusy] = useState(false);
@@ -550,11 +559,9 @@ function HistoryBundleExport({ studentId, lang, t }) {
     setProgress(t("جارٍ إعداد ملخص الطالب…", "Preparing the student summary…"));
     setFile(null);
     setError(null);
+    const context = createExportContext(exporter);
     try {
-      const [{ default: JSZip }, lib] = await Promise.all([
-        import("jszip"),
-        import("./exports.js"),
-      ]);
+      const { buildStudentArchive } = await import("./student-archive.js");
       const history = await loadProfileHistory(
         studentId,
         readStudentData,
@@ -568,97 +575,26 @@ function HistoryBundleExport({ studentId, lang, t }) {
         );
       if (!active()) return;
 
-      const zip = new JSZip();
-      const summaryBlob = await lib.pdfReportBlob(profileReport(history));
-      if (!active()) return;
-      zip.file("ملخص سجل الطالب.pdf", summaryBlob);
-      const records = history.records.filter((record) =>
-        ["case", "cases"].includes(record.kind),
-      );
-      const caseCount = records.reduce(
-        (count, record) =>
-          count +
-          (record.kind === "case" ? 1 : record.caseSummaries.length),
-        0,
-      );
-      let completed = 0;
-      setProgress(
-        caseCount
-          ? t(
-              `جارٍ إعداد الحالات (0 / ${caseCount})…`,
-              `Preparing cases (0 / ${caseCount})…`,
-            )
-          : t(
-              "لا توجد حالات مرتبطة؛ الملخص جاهز للإضافة…",
-              "No related cases; adding the summary…",
+      const blob = await buildStudentArchive(
+        history,
+        readStudentData,
+        context,
+        {
+          active,
+          onProgress: (completed, total) =>
+            setProgress(
+              total
+                ? t(
+                    `جارٍ إعداد الحالات (${completed} / ${total})…`,
+                    `Preparing cases (${completed} / ${total})…`,
+                  )
+                : t(
+                    "لا توجد حالات مرتبطة؛ الملخص جاهز للإضافة…",
+                    "No related cases; adding the summary…",
+                  ),
             ),
+        },
       );
-
-      for (const record of records) {
-        const detail = await readStudentData("student-report", {
-          studentId,
-          recordId: record.id,
-        });
-        if (!active()) return;
-        if (
-          detail.id !== record.id ||
-          detail.kind !== record.kind ||
-          detail.revision !== record.revision ||
-          detail.form?.kind !== record.kind
-        )
-          throw Object.assign(new Error("Student history changed"), {
-            code: "pagination_expired",
-          });
-
-        const entries =
-          record.kind === "case"
-            ? [
-                {
-                  form: detail.form,
-                  date: detail.date,
-                  reference: detail.reference,
-                },
-              ]
-            : Array.isArray(detail.form.rows) &&
-                detail.form.rows.length === record.caseSummaries.length
-              ? detail.form.rows.map((row) => ({
-                  form: { ...detail.form, rows: [row] },
-                  date: row.date || detail.date,
-                  reference: row.reference || detail.reference,
-                }))
-              : null;
-        if (!entries || !entries.length)
-          throw Object.assign(new Error("Student cases changed"), {
-            code: "pagination_expired",
-          });
-
-        for (const entry of entries) {
-          if (!active()) return;
-          const shortReference = shortCaseReference(entry.reference);
-          const baseName = [
-            `حالة-${String(completed + 1).padStart(3, "0")}`,
-            entry.date || "بدون-تاريخ",
-            shortReference,
-          ]
-            .filter(Boolean)
-            .join("-");
-          const blob = await lib.pdfBlob(entry.form);
-          zip.file(`الحالات/${historyFileName(baseName, "pdf")}`, blob);
-          completed++;
-          setProgress(
-            t(
-              `جارٍ إعداد الحالات (${completed} / ${caseCount})…`,
-              `Preparing cases (${completed} / ${caseCount})…`,
-            ),
-          );
-        }
-      }
-      if (!active()) return;
-      const blob = await zip.generateAsync({
-        type: "blob",
-        compression: "STORE",
-        mimeType: "application/zip",
-      });
       if (active()) {
         setFile({
           blob,
@@ -709,7 +645,9 @@ function HistoryBundleExport({ studentId, lang, t }) {
       aria-label={t("تنزيل ملف الطالب", "Download student file")}
     >
       <div>
-        <strong>{t("ملخص الطالب والحالات", "Student summary and cases")}</strong>
+        <strong>
+          {t("ملخص الطالب والحالات", "Student summary and cases")}
+        </strong>
         <p>
           {t(
             "ينزّل الملخص وملف PDF مستقلًا لكل حالة مرتبطة بالطالب في ملف ZIP واحد.",

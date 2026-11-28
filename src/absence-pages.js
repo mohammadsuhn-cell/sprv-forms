@@ -7,8 +7,22 @@ export function renderAbsencePages(report) {
     height = 794,
     margin = 36,
     gridWidth = width - margin * 2;
+  const stamp = report.exportStamp || exportStamp(report.supervisor);
+  // This fixed-grid form has no author metadata block. Retain its author on
+  // every page even when a different supervisor exports the received sheet.
   const footer = canvasExportFooter(
-    report.exportStamp || exportStamp(report.supervisor),
+    report.exportedBy
+      ? {
+          ...stamp,
+          text: [
+            `${report.authorLabel}: ${report.supervisor}`,
+            ...(report.exportMeta || []).map(
+              ([key, value]) => `${key}: ${value}`,
+            ),
+            stamp.text,
+          ].join(" | "),
+        }
+      : stamp,
     width,
     margin,
   );

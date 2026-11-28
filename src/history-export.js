@@ -72,6 +72,7 @@ export function profileReport(history) {
     kind: "student-profile",
     title: "ملخص سجل الطالب",
     supervisor: history.preparedBy,
+    dataAsOf: history.fetchedAt,
     landscape: true,
     meta: [
       ["اسم الطالب", history.student.name],

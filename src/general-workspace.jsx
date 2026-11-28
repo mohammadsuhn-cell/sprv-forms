@@ -1,6 +1,7 @@
 import { shortCaseReference } from "./case-reference.js";
+import { useReads, useExporter } from "./read-context.jsx";
+import { createExportContext } from "./export-stamp.js";
 import React, { useEffect, useRef, useState } from "react";
-import { useReads } from "./read-context.jsx";
 import { SchoolSnapshotWorkspace } from "./school-snapshot-workspace.jsx";
 import { ReviewPanel } from "./review-ui.jsx";
 import {
@@ -392,6 +393,8 @@ function Drilldown({
 }
 
 export function ReceivedExports({ detail, lang, t, children }) {
+  const exporter = useExporter();
+  const { dataAsOf } = useReads();
   const [busy, setBusy] = useState(false),
     [file, setFile] = useState(null),
     [error, setError] = useState("");
@@ -410,6 +413,11 @@ export function ReceivedExports({ detail, lang, t, children }) {
     setBusy(true);
     setFile(null);
     setError("");
+    const context = {
+      ...createExportContext(exporter),
+      sourceRevision: detail.revision,
+      dataAsOf,
+    };
     try {
       const lib = await import("./exports.js");
       const blob = await (
@@ -418,12 +426,18 @@ export function ReceivedExports({ detail, lang, t, children }) {
           : extension === "docx"
             ? lib.wordBlob
             : lib.excelBlob
-      )(detail.form);
+      )(detail.form, context);
       if (generation.current === version)
         setFile({
           blob,
           name: historyFileName(
-            `${detail.report.title}-${detail.reference || detail.date}`,
+            [
+              detail.report.title,
+              detail.date,
+              shortCaseReference(detail.reference),
+            ]
+              .filter(Boolean)
+              .join("-"),
             extension,
           ),
         });

@@ -1,5 +1,6 @@
 import { actionText } from "./case-options.js";
-import { exportStamp } from "./export-stamp.js";
+import { prepareExportReport } from "./export-stamp.js";
+import { caseReference, shortCaseReference } from "./case-reference.js";
 import { report, withSchoolIdentity, caseRegister } from "./model.js";
 import {
   printStyle as colors,
@@ -7,7 +8,7 @@ import {
   reportHeader,
 } from "./export-style.js";
 export const fileName = (form, extension) =>
-  `${report(form).title}-${form.date}.${extension}`.replace(
+  `${[report(form).title, form.date, shortCaseReference(caseReference(form))].filter(Boolean).join("-")}.${extension}`.replace(
     /[\\/:*?"<>|]/g,
     "-",
   );
@@ -24,11 +25,12 @@ export function download(blob, name) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
-export async function wordBlob(form) {
-  return wordReportBlob(report(form));
+export async function wordBlob(form, context) {
+  return wordReportBlob(report(form), context);
 }
-export async function wordReportBlob(r) {
-  const stamp = exportStamp(r.supervisor);
+export async function wordReportBlob(source, context) {
+  const r = prepareExportReport(source, context);
+  const stamp = r.exportStamp;
   const {
     Document,
     Packer,
@@ -192,7 +194,7 @@ export async function wordReportBlob(r) {
       ...r.meta.filter(
         ([key]) => !["التاريخ", "من تاريخ", "إلى تاريخ"].includes(key),
       ),
-      ["اسم المشرف", r.supervisor],
+      [r.authorLabel, r.supervisor],
     ],
     metaRows = [];
   for (let i = 0; i < metadata.length; i += 2) {
@@ -245,7 +247,7 @@ export async function wordReportBlob(r) {
           cantSplit: true,
           height: { value: 800, rule: HeightRule.ATLEAST },
           children: [
-            cell(`اسم المشرف: ${r.supervisor}`, { bold: true, size: 26 }),
+            cell(`${r.authorLabel}: ${r.supervisor}`, { bold: true, size: 26 }),
             cell("التوقيع: ................................", {
               bold: true,
               size: 26,
@@ -257,7 +259,8 @@ export async function wordReportBlob(r) {
     ),
   ];
   const doc = new Document({
-    creator: "",
+    creator: r.supervisor,
+    lastModifiedBy: r.exportedBy,
     title: r.title,
     styles: {
       default: {
@@ -298,7 +301,11 @@ export async function wordReportBlob(r) {
                 alignment: AlignmentType.CENTER,
                 children: [
                   new TextRun({
-                    children: [PageNumber.CURRENT],
+                    children: [
+                      PageNumber.CURRENT,
+                      " / ",
+                      PageNumber.TOTAL_PAGES,
+                    ],
                     size: 20,
                     color: colors.muted,
                   }),
@@ -313,17 +320,16 @@ export async function wordReportBlob(r) {
   });
   return Packer.toBlob(doc);
 }
-export async function pdfBlob(form) {
-  return pdfReportBlob(report(form));
+export async function pdfBlob(form, context) {
+  return pdfReportBlob(report(form), context);
 }
-export async function pdfReportBlob(source) {
-  const stamp = exportStamp(source.supervisor);
+export async function pdfReportBlob(source, context) {
+  const r = prepareExportReport(source, context);
   const [{ renderPages }, { jsPDF }] = await Promise.all([
     import("./pdf-pages.js"),
     import("jspdf"),
   ]);
-  const r = { ...source, exportStamp: stamp },
-    pages = await renderPages(r);
+  const pages = await renderPages(r);
   try {
     const pdf = new jsPDF({
       orientation: r.landscape ? "landscape" : "portrait",
@@ -331,7 +337,12 @@ export async function pdfReportBlob(source) {
       format: "a4",
       compress: true,
     });
-    pdf.setProperties({ title: r.title, author: "", creator: "نماذج الإشراف" });
+    pdf.setProperties({
+      title: r.title,
+      author: r.supervisor || "",
+      creator: "نماذج الإشراف",
+    });
+    pdf.setCreationDate(new Date(r.exportedAt));
     for (let i = 0; i < pages.length; i++) {
       if (i) pdf.addPage();
       pdf.addImage(
@@ -459,7 +470,7 @@ function excelHeader(sheet, r, stamp, title = r.title) {
     ...r.meta
       .filter(([key]) => !["التاريخ", "من تاريخ", "إلى تاريخ"].includes(key))
       .map(([key, value]) => `${key}: ${value}`),
-    `اسم المشرف: ${r.supervisor}`,
+    `${r.authorLabel}: ${r.supervisor}`,
   ].join("    ");
   sheet.getCell(5, 1).value = [head.issued, metadata]
     .filter(Boolean)
@@ -522,14 +533,18 @@ function excelCaseRows(record) {
   return rows;
 }
 
-export async function excelBlob(form) {
+export async function excelBlob(form, context) {
   form = withSchoolIdentity(form);
-  return excelReportBlob(report(form), form);
+  return excelReportBlob(report(form), form, context);
 }
-export async function excelReportBlob(r, form = null) {
-  const stamp = exportStamp(r.supervisor);
+export async function excelReportBlob(source, form = null, context) {
+  const r = prepareExportReport(source, context);
+  const stamp = r.exportStamp;
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
+  wb.creator = r.supervisor;
+  wb.lastModifiedBy = r.exportedBy;
+  wb.created = wb.modified = new Date(r.exportedAt);
   const addSheet = (name, widths, landscape) => {
     const sheet = wb.addWorksheet(name, {
       pageSetup: {

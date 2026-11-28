@@ -141,7 +141,13 @@ export function SchoolSnapshotWorkspace({
     };
   }, [identity]);
   const reader = useMemo(
-    () => (bundle ? createSnapshotReader(bundle.payload) : live),
+    () =>
+      bundle
+        ? {
+            ...createSnapshotReader(bundle.payload),
+            dataAsOf: bundle.payload.capturedAt,
+          }
+        : live,
     [bundle, live],
   );
   async function run(operation) {

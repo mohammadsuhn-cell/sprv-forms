@@ -6,3 +6,8 @@ export const ReadContext = createContext({
   local: false,
 });
 export const useReads = () => useContext(ReadContext);
+
+// Separate from the snapshot reader: an old offline copy must not supply the
+// identity of the person exporting it today.
+export const ExporterContext = createContext("");
+export const useExporter = () => useContext(ExporterContext);

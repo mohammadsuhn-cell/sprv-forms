@@ -193,7 +193,7 @@ export async function renderPages(r) {
     ...r.meta.filter(
       ([key]) => !["التاريخ", "من تاريخ", "إلى تاريخ"].includes(key),
     ),
-    ["اسم المشرف", r.supervisor],
+    [r.authorLabel || "اسم المشرف", r.supervisor],
   ];
   for (let i = 0; i < metadata.length; i += 2) {
     const pairs = metadata.slice(i, i + 2);
@@ -246,7 +246,7 @@ export async function renderPages(r) {
     y += 18;
   }
   const signature = wrap(
-    `اسم المشرف: ${r.supervisor}`,
+    `${r.authorLabel || "اسم المشرف"}: ${r.supervisor}`,
     contentWidth / 2 - 20,
     16,
   );
